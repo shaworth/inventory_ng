@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SV Frog & Puffin - Inventory Matrix</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #141923;
+            --bg-card: #1e2530;
+            --accent: #00adb5;
+            --text-main: #eef2f7;
+            --text-muted: #8a99ad;
+            --border: #2d3748;
+            --danger: #ff5c5c;
+            --success: #00e676;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        h1 { margin: 0; font-size: 1.6rem; color: var(--accent); }
+        .btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-danger { background: var(--danger); }
+        .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        
+        .broker-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            background: rgba(255,92,92,0.1);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+        .broker-status.connected {
+            background: rgba(0,230,118,0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .search-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .search-bar input {
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            flex: 1;
+        }
+
+        .view-panel { display: none; }
+        .view-panel.active { display: block; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th { background-color: rgba(0,173,181,0.1); color: var(--accent); }
+        tr:hover { background-color: rgba(255,255,255,0.02); }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .form-card {
+            background: var(--bg-card);
+            padding: 25px;
+            border-radius: 8px;
+            max-width: 600px;
+            border: 1px solid var(--border);
+        }
+        .action-tray {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>Vessel Inventory Engine</h1>
+            <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">Real-time tracking matrix</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div id="broker-indicator" class="broker-status">MQTT Offline</div>
+            <button class="btn btn-secondary" onclick="showListView()">List All</button>
+            <button class="btn btn-secondary" onclick="showOrphanView()">Unassigned / Orphans</button>
+            <button class="btn" onclick="showCreateView()">+ Add Item Manually</button>
+        </div>
+    </header>
+
+    <div id="search-container" class="search-bar">
+        <input type="text" id="search-title" placeholder="Search title substring..." oninput="triggerSearch()">
+        <input type="text" id="search-desc" placeholder="Search description substring..." oninput="triggerSearch()">
+        <input type="text" id="search-label" placeholder="Exact Label..." oninput="triggerSearch()">
+    </div>
+
+    <div id="view-list" class="view-panel active">
+        <table>
+            <thead>
+                <tr>
+                    <th>UID</th>
+                    <th>Title</th>
+                    <th>Parent Container</th>
+                    <th>Label</th>
+                    <th>Qty</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="inventory-table-body"></tbody>
+        </table>
+    </div>
+
+    <div id="view-form" class="view-panel">
+        <div class="form-card">
+            <h2 id="form-title" style="margin-top:0; color: var(--accent);">Edit Item</h2>
+            <form id="item-form" onsubmit="submitForm(event)">
+                <div class="form-group">
+                    <label>Hardware UID (RFID Tag)</label>
+                    <input type="text" id="form-uid" required>
+                </div>
+                <div class="form-group">
+                    <label>Title / Component Name</label>
+                    <input type="text" id="form-title-field" required>
+                </div>
+                <div class="form-group">
+                    <label>Parent Container</label>
+                    <select id="form-parent">
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Label Reference</label>
+                    <input type="text" id="form-label-field">
+                </div>
+                <div class="form-group">
+                    <label>Description / Technical Specification</label>
+                    <textarea id="form-desc" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Quantity Available</label>
+                    <input type="number" id="form-qty" value="1" min="0" required>
+                </div>
+                <div class="action-tray">
+                    <button type="submit" class="btn">Commit Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="showListView()">Cancel</button>
+                    <button type="button" id="form-delete-btn" class="btn btn-danger" style="margin-left: auto;">Soft Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Setup network-agnostic relative pathways
+        const clientHost = window.location.hostname;
+        const MQTT_BROKER = 'ws://' + clientHost + ':1884';
+
+        let allItems = [];
+        let isEditing = false; // System lock flag to intercept background scans safely
+
+        // Connect to Embedded Mochi MQTT Broker over WebSockets
+        console.log("Computed network broker bridge address: " + MQTT_BROKER);
+        const client = mqtt.connect(MQTT_BROKER);
+        const indicator = document.getElementById('broker-indicator');
+
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('scan-log');
+
+        function appendLog(message) {
+            const time = new Date().toLocaleTimeString();
+            if (logEl) {
+                logEl.innerHTML += '[' + time + '] ' + message + '<br>';
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+            console.log("[DOM Log Hook] " + message);
+        }
+
+        console.log("Vessel Inventory Script Core: Booting up...");
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM fully loaded and parsed. Ready to connect pipelines.");
+        });
+
+        client.on('connect', function () {
+            console.log("MQTT WebSocket Pipeline: Success Handshake Established!");
+            indicator.innerText = "MQTT Live";
+            indicator.className = "broker-status connected";
+            
+            // Explicitly pass a callback to verify the broker acked the subscription
+            client.subscribe('vessel/scan', function (err) {
+                if (err) {
+                    console.error("MQTT Subscription FAILED for 'vessel/scan':", err);
+                } else {
+                    console.log("MQTT Subscription VERIFIED and Active for 'vessel/scan'!");
+                }
+            });
+        });
+
+        client.on('close', () => {
+            indicator.innerText = "MQTT Offline";
+            indicator.className = "broker-status";
+        });
+
+        // REUSABLE FUNCTION: Isolates a specific target container and lists only its immediate active children
+        function isolateContainerHierarchy(targetUID) {
+            const scannedItem = allItems.find(item => item.uid === targetUID);
+
+            if (scannedItem) {
+                console.log("Isolating intermediate single-level tree for: " + scannedItem.title);
+                
+                // 1. Initialize the subset array with the scanned container itself as element #1
+                let hierarchySubsets = [scannedItem];
+
+                // 2. Perform a single-pass filter to collect immediate active children only (no recursion)
+                allItems.forEach(item => {
+                    if (item.parent === targetUID && item.active) {
+                        hierarchySubsets.push(item);
+                    }
+                });
+
+                // 3. Force view shift to the list panel and inject our shallow dataset
+                document.getElementById('search-container').style.display = 'flex';
+                
+                // Reset search parameters so input text doesn't conflict with filter results
+                document.getElementById('search-title').value = '';
+                document.getElementById('search-desc').value = '';
+                document.getElementById('search-label').value = '';
+
+                switchPanel('view-list');
+                // Pass true to bypass global filtering rules during targeted inspection layouts
+                renderTable(hierarchySubsets, true);
+                
+                console.log(`Shallow view rendered: 1 container root and ${hierarchySubsets.length - 1} immediate active children.`);
+            }
+        }
+
+        // HANDS-FREE AUTOMATED SCAN INTERCEPT PIPELINE (IMMEDIATE CHILDREN MODE)
+        client.on('message', function (topic, payload) {
+            console.log("-> WebSocket Message received, payload: " + payload);
+            var scannedUID = payload.toString().trim();
+            console.log("-> WebSocket Message Routed! Topic: " + topic + " | UID: " + scannedUID);
+
+            // Guard Statement: If user is actively editing a form, block context shifting
+            if (isEditing) {
+                console.log("UI locked in edit context. Suppressing auto-creation workflow.");
+                return;
+            }
+
+            // Check if the item already exists in our local dataset pool
+            const scannedItem = allItems.find(item => item.uid === scannedUID);
+
+            if (scannedItem) {
+                // Route to the centralized immediate-child isolation processor
+                isolateContainerHierarchy(scannedUID);
+            } else {
+                console.log("No record found. Initiating relative auto-creation loop...");
+
+                var newItem = {
+                    uid: scannedUID,
+                    active: true,
+                    parent: "", // Enforce blank string location natively
+                    label: "",
+                    title: "New Unregistered Component (" + scannedUID + ")",
+                    description: "",
+                    qty: 1
+                };
+
+                // Commit directly to your Go server memory file via REST API
+                fetch('/items', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newItem)
+                })
+                .then(function (saveResponse) {
+                    if (saveResponse.ok) {
+                        console.log("Auto-creation successful. Synchronizing database state...");
+                        loadData().then(function () {
+                            openEditScreen(newItem);
+                        });
+                    } else {
+                        console.error("Go backend rejected asset initialization structure.");
+                    }
+                });
+            }
+        });
+
+        // CORE REST DATABASE PIPELINE CALLS
+        async function loadData() {
+            try {
+                const response = await fetch('/items');
+                const data = await response.json();
+                allItems = data.items || [];
+                renderTable(allItems);
+                populateParentDropdown();
+            } catch (err) {
+                console.error("Database connection failure:", err);
+            }
+        }
+
+        // Modified renderTable to support a bypass flag for targeted content views
+        function renderTable(itemsList, bypassUnregisteredFilter = false) {
+            const tbody = document.getElementById('inventory-table-body');
+            tbody.innerHTML = '';
+            
+            itemsList.forEach(item => {
+                // EXPLICIT FILTER GUARD: Don't show skeleton auto-generated records in main views unless it's the root 'frog'
+                if (!bypassUnregisteredFilter && item.uid !== 'frog') {
+                    if (item.title && item.title.startsWith("New Unregistered Component")) {
+                        return; // Drop element processing loop
+                    }
+                }
+
+                const tr = document.createElement('tr');
+                
+                tr.innerHTML = `
+                    <td style="font-family: monospace; color: var(--accent);">${item.uid}</td>
+                    <td><strong>${item.title}</strong></td>
+                    <td>${item.parent === "" ? '<em style="color:var(--text-muted)">Unassigned Location</em>' : item.parent}</td>
+                    <td>${item.label}</td>
+                    <td>${item.qty}</td>
+                    <td>
+                        <button class="btn btn-secondary" style="padding: 5px 10px; font-size:0.8rem; margin-right: 4px;" id="edit-btn-${item.uid}">Edit</button>
+                        <button class="btn btn-secondary" style="padding: 5px 10px; font-size:0.8rem;" id="contents-btn-${item.uid}">Contents</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+                
+                // Attach event listeners dynamically
+                document.getElementById(`edit-btn-${item.uid}`).addEventListener('click', () => openEditScreen(item));
+                document.getElementById(`contents-btn-${item.uid}`).addEventListener('click', () => isolateContainerHierarchy(item.uid));
+            });
+        }
+        
+        // POPULATE DROPDOWN HIERARCHY BOX
+        function populateParentDropdown(currentEditingUID = "") {
+            const dropdown = document.getElementById('form-parent');
+            dropdown.innerHTML = '<option value="">(No Parent - Root Level Location)</option>';
+            
+            allItems.forEach(item => {
+                // Rule 1: An item cannot be its own parent
+                if (item.uid !== currentEditingUID) {
+                    const opt = document.createElement('option');
+                    opt.value = item.uid;
+                    opt.innerText = item.title + " (" + item.uid + ")";
+                    dropdown.appendChild(opt);
+                }
+            });
+        }
+
+        // VIEW VIEW CONTROLLERS
+        function showListView() {
+            isEditing = false;
+            document.getElementById('search-container').style.display = 'flex';
+            switchPanel('view-list');
+            loadData(); // Synchronize listing
+        }
+
+        function showOrphanView() {
+            isEditing = false;
+            document.getElementById('search-container').style.display = 'none';
+            // Isolate objects where parent parameter is an empty string, excluding root domain 'frog'
+            const orphans = allItems.filter(item => item.parent === "" && item.uid !== "frog");
+            renderTable(orphans);
+            switchPanel('view-list');
+        }
+
+        function showCreateView() {
+            isEditing = true;
+            document.getElementById('search-container').style.display = 'none';
+            document.getElementById('form-title').innerText = "Register New Asset";
+            document.getElementById('form-uid').value = "";
+            document.getElementById('form-uid').disabled = false;
+            document.getElementById('form-title-field').value = "";
+            document.getElementById('form-parent').value = "";
+            document.getElementById('form-parent').disabled = false; // unlocked
+            document.getElementById('form-label-field').value = "";
+            document.getElementById('form-desc').value = "";
+            document.getElementById('form-qty').value = "1";
+            document.getElementById('form-delete-btn').style.display = 'none';
+            
+            populateParentDropdown();
+            switchPanel('view-form');
+        }
+
+        function openEditScreen(item) {
+            isEditing = true;
+            document.getElementById('search-container').style.display = 'none';
+            document.getElementById('form-title').innerText = "Modify Configuration: " + item.uid;
+            
+            const uidField = document.getElementById('form-uid');
+            uidField.value = item.uid;
+            uidField.disabled = true; // Lock identity key during mutation routines
+
+            document.getElementById('form-title-field').value = item.title;
+            document.getElementById('form-label-field').value = item.label || "";
+            document.getElementById('form-desc').value = item.description || "";
+            document.getElementById('form-qty').value = item.qty;
+
+            populateParentDropdown(item.uid);
+            
+            const parentField = document.getElementById('form-parent');
+            parentField.value = item.parent;
+
+            // ROOT PROTECTION RULES: Core structural containment locking for 'frog'
+            if (item.uid === "frog") {
+                parentField.disabled = true; 
+                document.getElementById('form-delete-btn').style.display = 'none'; // The vessel cannot be deleted
+            } else {
+                parentField.disabled = false;
+                const delBtn = document.getElementById('form-delete-btn');
+                delBtn.style.display = 'inline-block';
+                delBtn.onclick = () => executeSoftDelete(item.uid);
+            }
+
+            switchPanel('view-form');
+        }
+
+        function switchPanel(panelId) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(panelId).classList.add('active');
+        }
+
+        // SUBSTRINGS ENGINE ENGINE FILTERING SEARCH
+        async function triggerSearch() {
+            const title = document.getElementById('search-title').value;
+            const desc = document.getElementById('search-desc').value;
+            const label = document.getElementById('search-label').value;
+
+            let params = new URLSearchParams();
+            if (title) params.append('title', title);
+            if (desc) params.append('description', desc);
+            if (label) params.append('label', label);
+
+            try {
+                const response = await fetch('/items?' + params.toString());
+                const data = await response.json();
+                renderTable(data.items || []);
+            } catch (err) {
+                console.error("Search criteria lookup failure:", err);
+            }
+        }
+
+        // FORM SUBMISSION OPS (POST/PUT REPLACEMENT)
+        async function submitForm(e) {
+            e.preventDefault();
+            
+            const payload = {
+                uid: document.getElementById('form-uid').value.trim(),
+                active: true,
+                parent: document.getElementById('form-parent').value, // returns empty string natively if unassigned
+                label: document.getElementById('form-label-field').value.trim(),
+                title: document.getElementById('form-title-field').value.trim(),
+                description: document.getElementById('form-desc').value.trim(),
+                qty: parseInt(document.getElementById('form-qty').value, 10)
+            };
+
+            try {
+                const response = await fetch('/items', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    showListView();
+                } else {
+                    alert("Failure storing object configuration structures.");
+                }
+            } catch (err) {
+                console.error("Write connection error:", err);
+            }
+        }
+
+        // SOFT DELETE INTERACTION HOOK
+        async function executeSoftDelete(uid) {
+            if (!confirm("Are you certain you wish to mark item '" + uid + "' as inactive?")) return;
+
+            try {
+                const response = await fetch('/items/' + uid, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showListView();
+                } else {
+                    alert("Soft-deletion loop rejected by Go API host.");
+                }
+            } catch (err) {
+                console.error("Deletion network tracking exception:", err);
+            }
+        }
+
+        // Initial launch sequence trigger
+        loadData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,220 @@
+{
+    "items": [
+        {
+            "uid": "frog",
+            "active": true,
+            "parent": "",
+            "label": "Frog and Puffin",
+            "title": "Frog and Puffin",
+            "description": "SV Frog and Puffin",
+            "qty": 1
+        },
+        {
+            "uid": "frog_port_aft",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_port_aft",
+            "title": "Port Aft Berth",
+            "description": "The port aft berth",
+            "qty": 1
+        },
+        {
+            "uid": "frog_port_landing",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_port_landing",
+            "title": "Port stairs landing area",
+            "description": "The port stairs landing area",
+            "qty": 1
+        },
+        {
+            "uid": "frog_port_forward_storage",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_port_forward_storage",
+            "title": "Port forward storage",
+            "description": "The port forward storage area",
+            "qty": 1
+        },
+        {
+            "uid": "frog_port_mid_storage",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_port_mid_storage",
+            "title": "Port mid storage",
+            "description": "The port mid storage area",
+            "qty": 1
+        },
+        {
+            "uid": "frog_starboard_landing",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_starboard_landing",
+            "title": "Starboard stairs landing area",
+            "description": "The starboard stairs landing area",
+            "qty": 1
+        },
+        {
+            "uid": "frog_starboard_aft",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_starboard_aft",
+            "title": "Starboard Aft Berth",
+            "description": "The starboard aft berth",
+            "qty": 1
+        },
+        {
+            "uid": "frog_starboard_fore",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_starboard_fore",
+            "title": "Starboard Forward Berth",
+            "description": "The starboard forward berth",
+            "qty": 1
+        },
+        {
+            "uid": "frog_galley",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_starboard_galley",
+            "title": "Galley",
+            "description": "The galley",
+            "qty": 1
+        },
+        {
+            "uid": "frog_head",
+            "active": true,
+            "parent": "frog",
+            "label": "frog_head",
+            "title": "Head",
+            "description": "The head",
+            "qty": 1
+        },
+        {
+            "uid": "abac",
+            "active": false,
+            "parent": "abcc",
+            "label": "",
+            "title": "A part",
+            "description": "Some obscure boat part (example)",
+            "qty": 1
+        },
+        {
+            "uid": "abcc",
+            "active": true,
+            "parent": "frog_port_forward_storage",
+            "label": "frog_port_mid_storage",
+            "title": "Storage box 'JP'",
+            "description": "Tan 17in x 17in lowes trailbox with JP sticker",
+            "qty": 1
+        },
+        {
+            "uid": "04:13:35:3b:38:02:89",
+            "active": true,
+            "parent": "frog_port_aft",
+            "label": "YW",
+            "title": "Tan storage (YW) with boat repair supplies",
+            "description": "Tan 17in x 17in trailbox",
+            "qty": 1
+        },
+        {
+            "uid": "04:06:56:ba:28:19:90",
+            "active": true,
+            "parent": "",
+            "label": "",
+            "title": "New Unregistered Component (04:06:56:ba:28:19:90)",
+            "description": "",
+            "qty": 1
+        },
+        {
+            "uid": "04:69:34:ba:28:19:90",
+            "active": true,
+            "parent": "frog",
+            "label": "camera_bag",
+            "title": "Camera Bag",
+            "description": "Black camera bag",
+            "qty": 1
+        },
+        {
+            "uid": "gopro_charger",
+            "active": true,
+            "parent": "frog",
+            "label": "gopro_charger",
+            "title": "GoPro battery charger",
+            "description": "Charger for gopro camera",
+            "qty": 1
+        },
+        {
+            "uid": "04:23:e8:4e:38:02:89",
+            "active": true,
+            "parent": "frog_port_aft",
+            "label": "KJY",
+            "title": "Tan 17in x 17in Tan Box (Scuba)",
+            "description": "Tan box",
+            "qty": 1
+        },
+        {
+            "uid": "04:53:47:ea:37:02:89",
+            "active": true,
+            "parent": "frog_port_aft",
+            "label": "BHC",
+            "title": "Tan 17in x 17in",
+            "description": "Empty",
+            "qty": 1
+        },
+        {
+            "uid": "04:e3:57:4f:38:02:89",
+            "active": true,
+            "parent": "frog_port_aft",
+            "label": "MZW",
+            "title": "Tan 17in x 17in (Boat Parts)",
+            "description": "Small boat parts",
+            "qty": 1
+        },
+        {
+            "uid": "sparky",
+            "active": true,
+            "parent": "04:e3:57:4f:38:02:89",
+            "label": "sparky",
+            "title": "Spark Plugs",
+            "description": "Spark Plugs",
+            "qty": 2
+        },
+        {
+            "uid": "compressor",
+            "active": true,
+            "parent": "04:23:e8:4e:38:02:89",
+            "label": "Compressor",
+            "title": "Air Compressor (Scuba)",
+            "description": "",
+            "qty": 1
+        },
+        {
+            "uid": "wetsuit_female",
+            "active": true,
+            "parent": "04:23:e8:4e:38:02:89",
+            "label": "wetsuit_female",
+            "title": "Woman's wetsuit",
+            "description": "",
+            "qty": 1
+        },
+        {
+            "uid": "04:d3:5e:34:38:02:89",
+            "active": true,
+            "parent": "frog_port_aft",
+            "label": "LUC",
+            "title": "Tan 17in x 17in Victron and other low amp",
+            "description": "",
+            "qty": 1
+        },
+        {
+            "uid": "04:e3:9c:44:38:02:89",
+            "active": true,
+            "parent": "frog_port_aft",
+            "label": "QPE",
+            "title": "17in x 37in Tan (Winches)",
+            "description": "Winches",
+            "qty": 1
+        }
+    ]
+}

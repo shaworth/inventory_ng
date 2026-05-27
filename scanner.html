@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boat Inventory Scanner</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #00adb5;
+        }
+        #status-box {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+        }
+        .ready { color: #4caf50; border-color: #4caf50 !important; }
+        .scanning { color: #ffeb3b; border-color: #ffeb3b !important; }
+        .success { color: #00adb5; border-color: #00adb5 !important; }
+        .error { color: #f44336; border-color: #f44336 !important; }
+        
+        #log {
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.85rem;
+            background: #000;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 150px;
+            overflow-y: auto;
+            color: #888;
+            border: 1px solid #222;
+        }
+        button {
+            background-color: #00adb5;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:active {
+            background-color: #007a80;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Vessel Inventory Scanner</h1>
+    <div id="status-box">Tap "Start Scanner" to begin</div>
+    <button id="scan-btn">Start Scanner</button>
+    <p style="margin-top: 20px; font-size: 0.9rem; color: #aaa;">Recent Activity:</p>
+    <div id="log">System idle...</div>
+</div>
+
+<script>
+    const statusBox = document.getElementById('status-box');
+    const logBox = document.getElementById('log');
+    const scanBtn = document.getElementById('scan-btn');
+
+    // Configuration Node-RED endpoint on the Cerbo GX, 
+    // token will be replaced by go http server to reflect the server's address
+    const NODERED_URL = '/scan';
+    function log(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        logBox.innerHTML = `[${timestamp}] ${message}<br>` + logBox.innerHTML;
+    }
+
+    function updateStatus(text, className) {
+        statusBox.innerText = text;
+        statusBox.className = className;
+    }
+
+    if (!('NDEFReader' in window)) {
+        updateStatus('Web NFC not supported in this browser.', 'error');
+        log('Error: Web NFC API missing. Check flags or browser variant.');
+        scanBtn.style.display = 'none';
+    }
+
+    scanBtn.addEventListener('click', async () => {
+        try {
+            updateStatus('Initializing NFC...', 'scanning');
+            const ndef = new NDEFReader();
+            await ndef.scan();
+            
+            updateStatus('Ready to Scan Tag', 'ready');
+            log('NFC hardware activated successfully.');
+            scanBtn.style.display = 'none'; // Keep active once started
+
+            ndef.addEventListener("readingerror", () => {
+                log("Error reading tag. Try holding it closer.");
+                updateStatus('Reading Error', 'error');
+                setTimeout(() => updateStatus('Ready to Scan Tag', 'ready'), 2000);
+            });
+
+            ndef.addEventListener("reading", ({ serialNumber }) => {
+                // Check if we retrieved a valid UID
+                if (!serialNumber) {
+                    log("Tag detected, but no UID (serial number) found.");
+                    return;
+                }
+
+                log(`Tag Found! UID: ${serialNumber}`);
+                updateStatus(`Processing: ${serialNumber}`, 'scanning');
+
+                // Dispatch the background GET request to Node-RED
+                const targetUrl = `${NODERED_URL}?uid=${encodeURIComponent(serialNumber)}`;
+                
+                // Using mode: 'no-cors' if Node-RED doesn't return CORS headers,
+                // or standard fetch if Node-RED handles CORS explicitly.
+                fetch(targetUrl, { 
+                    method: 'GET',
+                    mode: 'cors' 
+                })
+                .then(response => {
+                    log(`Node-RED acknowledged dispatch.`);
+                    updateStatus('Success! Sent to MQTT.', 'success');
+                    // Vibrate the phone to confirm success (2 short pulses)
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    
+                    setTimeout(() => updateStatus('Ready to Scan Tag', 'ready'), 1500);
+                })
+                .catch(err => {
+                    log(`Network Error sending to Node-RED: ${err.message}`);
+                    updateStatus('Network Error', 'error');
+                    if (navigator.vibrate) navigator.vibrate(500); // 1 long error pulse
+                    
+                    setTimeout(() => updateStatus('Ready to Scan Tag', 'ready'), 3000);
+                });
+            });
+
+        } catch (error) {
+            log(`Activation failed: ${error}`);
+            updateStatus('Permission / Hardware Error', 'error');
+        }
+    });
+</script>
+
+</body>
+</html>
+

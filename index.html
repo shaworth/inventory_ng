@@ -6,6 +6,10 @@
     <title>SV Frog & Puffin - Inventory Matrix</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
+        /* Hide the UID column from the viewport */
+        th:nth-child(1), td:nth-child(1) {
+            display: none;
+        }
         :root {
             --bg-main: #141923;
             --bg-card: #1e2530;
@@ -133,7 +137,7 @@
 
     <header>
         <div>
-            <h1>Vessel Inventory Engine</h1>
+            <h1>Vessel Inventory Tracker</h1>
             <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">Real-time tracking matrix</p>
         </div>
         <div style="display: flex; align-items: center; gap: 15px;">
@@ -154,7 +158,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>UID</th>
+<!---->                    <th>UID</th> -->
                     <th>Title</th>
                     <th>Parent Container</th>
                     <th>Label</th>
@@ -205,7 +209,7 @@
     </div>
 
     <script>
-        // Setup network-agnostic relative pathways
+// Setup network-agnostic relative pathways
         const clientHost = window.location.hostname;
         const MQTT_BROKER = 'ws://' + clientHost + ':1884';
 
@@ -239,7 +243,6 @@
             indicator.innerText = "MQTT Live";
             indicator.className = "broker-status connected";
             
-            // Explicitly pass a callback to verify the broker acked the subscription
             client.subscribe('vessel/scan', function (err) {
                 if (err) {
                     console.error("MQTT Subscription FAILED for 'vessel/scan':", err);
@@ -254,46 +257,71 @@
             indicator.className = "broker-status";
         });
 
+        // NEW HELPER: Generates the next sequential UID based on current state or last_uid metadata
+        function generateNextUID(backendLastUid = "") {
+            let highestHex = 1; // Default fallback to start after root if array empty
+
+            // Pull from backend metadata string if validly shaped
+            if (backendLastUid && backendLastUid.startsWith("0A:")) {
+                const numericPart = backendLastUid.replace(/[:]/g, '').substring(2);
+                highestHex = parseInt(numericPart, 16);
+            }
+
+            // Cross-reference with current in-memory array to prevent local state race conditions
+            allItems.forEach(item => {
+                if (item.uid && item.uid.startsWith("0A:")) {
+                    const numericPart = item.uid.replace(/[:]/g, '').substring(2);
+                    const val = parseInt(numericPart, 16);
+                    if (val > highestHex) highestHex = val;
+                }
+            });
+
+            // Increment and pad out to standard 7-byte hex string format
+            const nextVal = highestHex + 1;
+            const hexString = nextVal.toString(16).toUpperCase().padStart(12, '0');
+            
+            // Format back into 0A:00:00:00:00:00:XX structure
+            return "0A:" + hexString.match(/.{1,2}/g).join(':');
+        }
+
         // REUSABLE FUNCTION: Isolates a specific target container and lists only its immediate active children
         function isolateContainerHierarchy(targetUID) {
             const scannedItem = allItems.find(item => item.uid === targetUID);
 
             if (scannedItem) {
-                console.log("Isolating intermediate single-level tree for: " + scannedItem.title);
+                console.log("Isolating intermediate single-level tree for: " + (scannedItem.title || scannedItem.label));
                 
-                // 1. Initialize the subset array with the scanned container itself as element #1
                 let hierarchySubsets = [scannedItem];
 
-                // 2. Perform a single-pass filter to collect immediate active children only (no recursion)
                 allItems.forEach(item => {
                     if (item.parent === targetUID && item.active) {
                         hierarchySubsets.push(item);
                     }
                 });
 
-                // 3. Force view shift to the list panel and inject our shallow dataset
                 document.getElementById('search-container').style.display = 'flex';
                 
-                // Reset search parameters so input text doesn't conflict with filter results
                 document.getElementById('search-title').value = '';
                 document.getElementById('search-desc').value = '';
                 document.getElementById('search-label').value = '';
 
                 switchPanel('view-list');
-                // Pass true to bypass global filtering rules during targeted inspection layouts
                 renderTable(hierarchySubsets, true);
-                
-                console.log(`Shallow view rendered: 1 container root and ${hierarchySubsets.length - 1} immediate active children.`);
             }
         }
 
-        // HANDS-FREE AUTOMATED SCAN INTERCEPT PIPELINE (IMMEDIATE CHILDREN MODE)
+// HANDS-FREE AUTOMATED SCAN INTERCEPT PIPELINE (PRESERVES SCANNED UIDs)
+
+// Global tracking set to block duplicate concurrent creation routines
+        const pendingAutoCreates = new Set();
+
+        // HANDS-FREE AUTOMATED SCAN INTERCEPT PIPELINE
         client.on('message', function (topic, payload) {
             console.log("-> WebSocket Message received, payload: " + payload);
             var scannedUID = payload.toString().trim();
             console.log("-> WebSocket Message Routed! Topic: " + topic + " | UID: " + scannedUID);
 
-            // Guard Statement: If user is actively editing a form, block context shifting
+            // Guard Statement 1: If user is actively editing a form, block context shifting
             if (isEditing) {
                 console.log("UI locked in edit context. Suppressing auto-creation workflow.");
                 return;
@@ -306,15 +334,23 @@
                 // Route to the centralized immediate-child isolation processor
                 isolateContainerHierarchy(scannedUID);
             } else {
-                console.log("No record found. Initiating relative auto-creation loop...");
+                // Guard Statement 2: Block duplicate network requests if tag is resting on the reader
+                if (pendingAutoCreates.has(scannedUID)) {
+                    console.log("Creation already in progress for UID: " + scannedUID + ". Aborting duplicate loop.");
+                    return;
+                }
+                pendingAutoCreates.add(scannedUID);
 
+                console.log("No record found. Preserving scanned hardware UID...");
+
+                // Construct new item using the exact scanned hardware UID off the wire
                 var newItem = {
                     uid: scannedUID,
                     active: true,
-                    parent: "", // Enforce blank string location natively
+                    parent: "", 
                     label: "",
-                    title: "New Unregistered Component (" + scannedUID + ")",
-                    description: "",
+                    title: "New Unregistered Component",
+                    description: "Scanned Tag ID: " + scannedUID,
                     qty: 1
                 };
 
@@ -333,16 +369,46 @@
                     } else {
                         console.error("Go backend rejected asset initialization structure.");
                     }
+                })
+                .catch(function (err) {
+                    console.error("Network error during auto-creation:", err);
+                })
+                .finally(function () {
+                    // Release the lock so this UID can be safely processed again if scanned in the future
+                    pendingAutoCreates.delete(scannedUID);
                 });
             }
         });
+
+        function getDescendants(parentUID) {
+            let descendants = [];
+            allItems.forEach(item => {
+                if (item.parent === parentUID) {
+                    descendants.push(item.uid);
+                    descendants = descendants.concat(getDescendants(item.uid));
+                }
+            });
+            return descendants;
+        }
+
 
         // CORE REST DATABASE PIPELINE CALLS
         async function loadData() {
             try {
                 const response = await fetch('/items');
                 const data = await response.json();
-                allItems = data.items || [];
+                
+                const rootUIDs = data.rootuids || [];
+                const itemsList = data.items || [];
+                window.backendLastUid = data.last_uid || ""; // Store globally to feed generator reference
+
+                allItems = itemsList.map(item => {
+                    return {
+                        ...item,
+                        isRoot: rootUIDs.includes(item.uid)
+                    };
+                });
+
                 renderTable(allItems);
                 populateParentDropdown();
             } catch (err) {
@@ -350,25 +416,24 @@
             }
         }
 
-        // Modified renderTable to support a bypass flag for targeted content views
         function renderTable(itemsList, bypassUnregisteredFilter = false) {
             const tbody = document.getElementById('inventory-table-body');
             tbody.innerHTML = '';
             
             itemsList.forEach(item => {
-                // EXPLICIT FILTER GUARD: Don't show skeleton auto-generated records in main views unless it's the root 'frog'
-                if (!bypassUnregisteredFilter && item.uid !== 'frog') {
+                if (!bypassUnregisteredFilter && !item.isRoot) {
                     if (item.title && item.title.startsWith("New Unregistered Component")) {
-                        return; // Drop element processing loop
+                        return;
                     }
                 }
 
                 const tr = document.createElement('tr');
                 
+                // UID is kept in the DOM string for index-matching, but hidden visually via CSS rules
                 tr.innerHTML = `
                     <td style="font-family: monospace; color: var(--accent);">${item.uid}</td>
-                    <td><strong>${item.title}</strong></td>
-                    <td>${item.parent === "" ? '<em style="color:var(--text-muted)">Unassigned Location</em>' : item.parent}</td>
+                    <td><strong>${item.title || item.label || '<em style="color:var(--text-muted)">Unnamed Asset</em>'}</strong></td>
+                    <td>${item.parent === "" ? '<em style="color:var(--text-muted)">Unassigned Location</em>' : (allItems.find(p => p.uid === item.parent)?.label || item.parent)}</td>
                     <td>${item.label}</td>
                     <td>${item.qty}</td>
                     <td>
@@ -378,54 +443,89 @@
                 `;
                 tbody.appendChild(tr);
                 
-                // Attach event listeners dynamically
                 document.getElementById(`edit-btn-${item.uid}`).addEventListener('click', () => openEditScreen(item));
                 document.getElementById(`contents-btn-${item.uid}`).addEventListener('click', () => isolateContainerHierarchy(item.uid));
             });
         }
-        
+// HELPER FUNCTION: Recursively finds all descendants of a given parent UID
+        // Used to prevent circular containment relationships (e.g., placing a box inside itself)
+        function getDescendants(parentUID) {
+            let descendants = [];
+            allItems.forEach(item => {
+                if (item.parent === parentUID) {
+                    descendants.push(item.uid);
+                    descendants = descendants.concat(getDescendants(item.uid));
+                }
+            });
+            return descendants;
+        }
+
         // POPULATE DROPDOWN HIERARCHY BOX
         function populateParentDropdown(currentEditingUID = "") {
+            const unsorted = new Array();
             const dropdown = document.getElementById('form-parent');
             dropdown.innerHTML = '<option value="">(No Parent - Root Level Location)</option>';
             
+            // Build list of illegal parent options (the item itself + all its child/grandchild containers)
+            const illegalParents = [currentEditingUID, ...getDescendants(currentEditingUID)];
+            
             allItems.forEach(item => {
-                // Rule 1: An item cannot be its own parent
-                if (item.uid !== currentEditingUID) {
+                // Rule 1: An item cannot be its own parent, nor can it be placed inside its own children
+                // Rule 2: Only items with a valid, non-empty label can act as a container
+                if (!illegalParents.includes(item.uid) && item.label && item.label.trim() !== "") {
                     const opt = document.createElement('option');
                     opt.value = item.uid;
-                    opt.innerText = item.title + " (" + item.uid + ")";
-                    dropdown.appendChild(opt);
+                    
+                    const cleanLabel = item.label.trim();
+                    
+                    // Format option display text based on label criteria
+                    if (cleanLabel.length === 3) {
+                        opt.innerText = cleanLabel + " - " + (item.title || "Unnamed Container");
+                    } else {
+                        opt.innerText = item.title || cleanLabel || item.uid;
+                    }
+                    
+                    unsorted.push(opt);
                 }
             });
-        }
+            
+            // Sort elements safely by their readable text values before DOM insertion
+            unsorted.sort((a, b) => a.innerText.localeCompare(b.innerText));
+            
+            // Flush sorted options into the dropdown element
+            unsorted.forEach(opt => dropdown.appendChild(opt));
+        }        
 
-        // VIEW VIEW CONTROLLERS
         function showListView() {
             isEditing = false;
             document.getElementById('search-container').style.display = 'flex';
             switchPanel('view-list');
-            loadData(); // Synchronize listing
+            loadData();
         }
 
         function showOrphanView() {
             isEditing = false;
             document.getElementById('search-container').style.display = 'none';
-            // Isolate objects where parent parameter is an empty string, excluding root domain 'frog'
-            const orphans = allItems.filter(item => item.parent === "" && item.uid !== "frog");
+            const orphans = allItems.filter(item => item.parent === "" && !item.isRoot);
             renderTable(orphans);
             switchPanel('view-list');
         }
 
+        // Modified: Generates and handles UID assignment automatically in the background
         function showCreateView() {
             isEditing = true;
             document.getElementById('search-container').style.display = 'none';
             document.getElementById('form-title').innerText = "Register New Asset";
-            document.getElementById('form-uid').value = "";
-            document.getElementById('form-uid').disabled = false;
+            
+            // Generate next available sequential address natively and keep hidden from edit card inputs
+            const hiddenGeneratedUid = generateNextUID(window.backendLastUid);
+            const uidField = document.getElementById('form-uid');
+            uidField.value = hiddenGeneratedUid;
+            uidField.closest('.form-group').style.display = 'none'; // Completely hides row wrapper container
+
             document.getElementById('form-title-field').value = "";
             document.getElementById('form-parent').value = "";
-            document.getElementById('form-parent').disabled = false; // unlocked
+            document.getElementById('form-parent').disabled = false;
             document.getElementById('form-label-field').value = "";
             document.getElementById('form-desc').value = "";
             document.getElementById('form-qty').value = "1";
@@ -438,11 +538,12 @@
         function openEditScreen(item) {
             isEditing = true;
             document.getElementById('search-container').style.display = 'none';
-            document.getElementById('form-title').innerText = "Modify Configuration: " + item.uid;
+            document.getElementById('form-title').innerText = "Modify Configuration: " + (item.title || item.label || "Asset");
             
+            // Assign and hide the UID input group field wrapper completely
             const uidField = document.getElementById('form-uid');
             uidField.value = item.uid;
-            uidField.disabled = true; // Lock identity key during mutation routines
+            uidField.closest('.form-group').style.display = 'none'; 
 
             document.getElementById('form-title-field').value = item.title;
             document.getElementById('form-label-field').value = item.label || "";
@@ -454,10 +555,9 @@
             const parentField = document.getElementById('form-parent');
             parentField.value = item.parent;
 
-            // ROOT PROTECTION RULES: Core structural containment locking for 'frog'
-            if (item.uid === "frog") {
+            if (item.isRoot) {
                 parentField.disabled = true; 
-                document.getElementById('form-delete-btn').style.display = 'none'; // The vessel cannot be deleted
+                document.getElementById('form-delete-btn').style.display = 'none';
             } else {
                 parentField.disabled = false;
                 const delBtn = document.getElementById('form-delete-btn');
@@ -473,7 +573,6 @@
             document.getElementById(panelId).classList.add('active');
         }
 
-        // SUBSTRINGS ENGINE ENGINE FILTERING SEARCH
         async function triggerSearch() {
             const title = document.getElementById('search-title').value;
             const desc = document.getElementById('search-desc').value;
@@ -493,14 +592,13 @@
             }
         }
 
-        // FORM SUBMISSION OPS (POST/PUT REPLACEMENT)
         async function submitForm(e) {
             e.preventDefault();
             
             const payload = {
                 uid: document.getElementById('form-uid').value.trim(),
                 active: true,
-                parent: document.getElementById('form-parent').value, // returns empty string natively if unassigned
+                parent: document.getElementById('form-parent').value,
                 label: document.getElementById('form-label-field').value.trim(),
                 title: document.getElementById('form-title-field').value.trim(),
                 description: document.getElementById('form-desc').value.trim(),
@@ -524,9 +622,8 @@
             }
         }
 
-        // SOFT DELETE INTERACTION HOOK
         async function executeSoftDelete(uid) {
-            if (!confirm("Are you certain you wish to mark item '" + uid + "' as inactive?")) return;
+            if (!confirm("Are you certain you wish to mark this item as inactive?")) return;
 
             try {
                 const response = await fetch('/items/' + uid, {
@@ -543,8 +640,7 @@
             }
         }
 
-        // Initial launch sequence trigger
-        loadData();
+        loadData();        
     </script>
 </body>
 </html>

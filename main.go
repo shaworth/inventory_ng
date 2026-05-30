@@ -27,9 +27,11 @@ type Item struct {
 	Qty         int    `json:"qty"`
 }
 
-// Wrapper to match your exact JSON structure
+// Inventory handles structural changes, tracking metadata properties alongside elements
 type Inventory struct {
-	Items []Item `json:"items"`
+	RootUIDs []string `json:"rootuids"`
+	LastUID  string   `json:"last_uid"`
+	Items    []Item   `json:"items"`
 }
 
 // Database encapsulates our in-memory data store, file path, and thread safety
@@ -57,33 +59,27 @@ func (h *ConsoleLoggerHook) ID() string {
 	return "console-logger-hook"
 }
 
-// Update this to register for Publishing, Authentication, AND Access Control checks
 func (h *ConsoleLoggerHook) Provides(b byte) bool {
 	return b == mqtt.OnPublish || b == mqtt.OnConnectAuthenticate || b == mqtt.OnACLCheck
 }
 
-// NEW: This forces the broker to safely accept all connections without credential failures
 func (h *ConsoleLoggerHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) bool {
 	return true
 }
 
-// NEW: This forces the broker to allow read/write subscription configurations across all topics
 func (h *ConsoleLoggerHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
-	// Always grant access (true) for both publishes (write=true) and subscriptions (write=false)
 	return true
 }
 
-// OnPublish logs your live tag traffic to the terminal
 func (h *ConsoleLoggerHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Packet, error) {
 	log.Printf("[MQTT TRAFFIC] Topic: %s | Payload: %s\n", pk.TopicName, string(pk.Payload))
 	return pk, nil
 }
 
 func main() {
-
 	// 1. Initialize Mochi MQTT Broker with Inline Client capabilities activated
 	mqttServer := mqtt.New(&mqtt.Options{
-		InlineClient: true, // <-- This allows internal Publish calls to succeed
+		InlineClient: true,
 	})
 
 	tcpListener := listeners.NewTCP(listeners.Config{
@@ -94,13 +90,11 @@ func main() {
 		log.Fatalf("Failed to add MQTT TCP listener: %v", err)
 	}
 
-	// Register the custom console logging hook into the broker's runtime loop
 	err := mqttServer.AddHook(new(ConsoleLoggerHook), nil)
 	if err != nil {
 		log.Fatalf("Failed to attach MQTT logger hook: %v", err)
 	}
 
-	// WebSocket listener for Web Dashboards (Port 1884)
 	wsListener := listeners.NewWebsocket(listeners.Config{
 		ID:      "vessel-websocket-listener",
 		Address: "0.0.0.0:1884",
@@ -109,7 +103,6 @@ func main() {
 		log.Fatalf("Failed to add MQTT WebSocket listener: %v", err)
 	}
 
-	// Start MQTT loop
 	go func() {
 		fmt.Println("Embedded MQTT Broker starting on 0.0.0.0:1883 & :1884...")
 		if err := mqttServer.Serve(); err != nil {
@@ -117,11 +110,15 @@ func main() {
 		}
 	}()
 
-	// 2. Initialize Data Store
+	// 2. Initialize Data Store with structural defaults
 	db := &Database{
 		filePath: defaultFilePath,
-		data:     Inventory{Items: []Item{}},
-		mqtt:     mqttServer,
+		data: Inventory{
+			RootUIDs: []string{"0A:00:00:00:00:00:01"}, // Default structured root fallback anchor
+			LastUID:  "0A:00:00:00:00:00:01",
+			Items:    []Item{},
+		},
+		mqtt: mqttServer,
 	}
 
 	if err := db.load(); err != nil {
@@ -129,11 +126,10 @@ func main() {
 	}
 
 	// 3. Register Explicit HTTP Routing Handlers
-	http.HandleFunc("/items", db.handleItems)       // REST API Search & Upsert
-	http.HandleFunc("/items/", db.handleIndividual) // REST API Mutators
-	http.HandleFunc("/scan", db.handlePhoneScan)    // WebNFC Phone Webhook Receiver
+	http.HandleFunc("/items", db.handleItems)
+	http.HandleFunc("/items/", db.handleIndividual)
+	http.HandleFunc("/scan", db.handlePhoneScan)
 
-	// Dedicated Strict UI Handlers
 	http.HandleFunc("/index.html", handleDashboardFile)
 	http.HandleFunc("/scanner.html", handleScannerFile)
 
@@ -146,8 +142,6 @@ func main() {
 		log.Fatalf("HTTP Server crashed: %v", err)
 	}
 }
-
-// --- STANDARD HANDLER FALLBACKS ---
 
 func handleDashboardFile(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/index.html" {
@@ -244,7 +238,13 @@ func (db *Database) searchItems(w http.ResponseWriter, r *http.Request) {
 			filtered = append(filtered, item)
 		}
 	}
-	json.NewEncoder(w).Encode(Inventory{Items: filtered})
+
+	// Returns the wrapper with metadata alongside filtered items
+	json.NewEncoder(w).Encode(Inventory{
+		RootUIDs: db.data.RootUIDs,
+		LastUID:  db.data.LastUID,
+		Items:    filtered,
+	})
 }
 
 func (db *Database) getItemByUID(w http.ResponseWriter, uid string) {
@@ -272,6 +272,18 @@ func (db *Database) upsertItem(w http.ResponseWriter, r *http.Request) {
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	// Metadata Tracking: If the item uses our internal sequential syntax (0A:),
+	// track it to ensure last_uid updates on manual registration additions.
+	if strings.HasPrefix(incoming.UID, "0A:") {
+		incomingNorm := strings.ReplaceAll(incoming.UID, ":", "")
+		lastNorm := strings.ReplaceAll(db.data.LastUID, ":", "")
+
+		// Lexicographical comparison works safely since strings are zero-padded left
+		if incomingNorm > lastNorm {
+			db.data.LastUID = incoming.UID
+		}
+	}
 
 	foundIndex := -1
 	for i, item := range db.data.Items {

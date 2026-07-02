@@ -158,10 +158,10 @@
         <table>
             <thead>
                 <tr>
-<!---->                    <th>UID</th> -->
+                    <th>UID</th>
                     <th>Title</th>
-                    <th>Parent Container</th>
                     <th>Label</th>
+                    <th>Parent Container</th>
                     <th>Qty</th>
                     <th>Actions</th>
                 </tr>
@@ -432,9 +432,9 @@
                 // UID is kept in the DOM string for index-matching, but hidden visually via CSS rules
                 tr.innerHTML = `
                     <td style="font-family: monospace; color: var(--accent);">${item.uid}</td>
-                    <td><strong>${item.title || item.label || '<em style="color:var(--text-muted)">Unnamed Asset</em>'}</strong></td>
+                    <td><strong>${item.title || '<em style="color:var(--text-muted)">Unnamed Asset</em>'}</strong></td>
+                    <td>${item.label} 
                     <td>${item.parent === "" ? '<em style="color:var(--text-muted)">Unassigned Location</em>' : (allItems.find(p => p.uid === item.parent)?.label || item.parent)}</td>
-                    <td>${item.label}</td>
                     <td>${item.qty}</td>
                     <td>
                         <button class="btn btn-secondary" style="padding: 5px 10px; font-size:0.8rem; margin-right: 4px;" id="edit-btn-${item.uid}">Edit</button>

@@ -9,15 +9,16 @@ SRC_FILE="main.go"
 DIST_DIR="dist"
 
 # Target deployment node details (Modify as needed)
-PI_HOST="raspberrypi.local"
-PI_USER="pi"
-PI_DEST_DIR="/home/pi/vessel-inventory"
+PI_HOST="boathub"
+PI_USER="shaworth"
+PI_DEST_DIR="/home/${PI_USER}/vessel-inventory"
 
 # Array of target platforms in the format "GOOS/GOARCH"
 TARGETS=(
     "darwin/arm64"
     "linux/arm64"
     "linux/arm"
+    "android/arm64"
 )
 
 # --- FLAG PARSING ---
@@ -43,6 +44,11 @@ for TARGET in "${TARGETS[@]}"; do
     # Determine the output structure
     TARGET_DIR="${DIST_DIR}/${GOOS}/${GOARCH}"
     mkdir -p "$TARGET_DIR"
+
+    
+    echo "💾 Copying items.json into target directory."
+    cp items.json "${TARGET_DIR}/"
+
     OUTPUT_NAME="${TARGET_DIR}/${APP_NAME}"
     
     echo "📦 Building for OS: ${GOOS} | Arch: ${GOARCH} -> ${OUTPUT_NAME}"
@@ -65,7 +71,7 @@ if [ "$DEPLOY" = true ]; then
     
     # Determine which binary to push (Defaulting to Linux ARM64 for Pi 3/4/5)
     # If using a 32-bit Pi base image, swap path to: dist/linux/arm/inventory_server
-    DEPLOY_SRC="dist/linux/arm64/${APP_NAME}"
+    DEPLOY_SRC="dist/linux/arm/${APP_NAME}"
     
     if [ ! -f "$DEPLOY_SRC" ]; then
         echo "❌ Error: Target deploy file $DEPLOY_SRC not found."

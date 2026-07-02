@@ -3,10 +3,14 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,7 +81,45 @@ func (h *ConsoleLoggerHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packe
 }
 
 func main() {
-	// 1. Initialize Mochi MQTT Broker with Inline Client capabilities activated
+	// 1. Intercept execution logic if the dynamic self-installation flag is present
+	installFlag := flag.Bool("install", false, "Install and configure the systemd service matching the current environment user context")
+	flag.Parse()
+
+	if *installFlag {
+		err := installService()
+		if err != nil {
+			log.Fatalf("Installation failed: %v", err)
+		}
+		os.Exit(0)
+	}
+	// NEW: Verify service environment context if launched manually without arguments
+	// Track whether we are running in an interactive manual terminal session
+	useCurrentWd := false
+
+	// Verify service environment context if launched manually without arguments
+	if len(os.Args) == 1 {
+		servicePath := "/etc/systemd/system/vessel-inventory.service"
+		if _, err := os.Stat(servicePath); os.IsNotExist(err) {
+			fmt.Println("⚠️  Notice: This server is not currently registered as a systemd background service.")
+			fmt.Print("Would you like to run it directly in this terminal session? (y/N): ")
+
+			var response string
+			fmt.Scanln(&response)
+			response = strings.ToLower(strings.TrimSpace(response))
+
+			if response != "y" && response != "yes" {
+				fmt.Println("\n--- Help Menu ---")
+				flag.Usage()
+				os.Exit(0)
+			}
+
+			// User opted to continue manually, target the local terminal workspace
+			useCurrentWd = true
+			fmt.Println("🚀 Launching local server session using current working directory...")
+		}
+	}
+
+	// 2. Initialize Mochi MQTT Broker with Inline Client capabilities activated
 	mqttServer := mqtt.New(&mqtt.Options{
 		InlineClient: true,
 	})
@@ -109,10 +151,28 @@ func main() {
 			log.Fatalf("MQTT Broker crashed: %v", err)
 		}
 	}()
+	// 3. Resolve Database File Path Coordinates Dynamically
+	targetDataPath := defaultFilePath // Default fallback to relative filename string ("items.json")
 
-	// 2. Initialize Data Store with structural defaults
+	if useCurrentWd {
+		workingDir, err := os.Getwd()
+		if err == nil {
+			targetDataPath = filepath.Join(workingDir, defaultFilePath)
+		} else {
+			log.Printf("⚠️  Failed to resolve working directory path: %v. Falling back to default routing.", err)
+		}
+	} else {
+		// When running under systemd or with args, tie the dataset path directly to the binary's folder
+		binaryPath, err := filepath.Abs(os.Args[0])
+		if err == nil {
+			targetDataPath = filepath.Join(filepath.Dir(binaryPath), defaultFilePath)
+		}
+	}
+
+	log.Printf("📂 Database storage mapped to target tracking anchor: %s\n", targetDataPath)
+	// 4. Initialize Data Store with structural defaults
 	db := &Database{
-		filePath: defaultFilePath,
+		filePath: targetDataPath,
 		data: Inventory{
 			RootUIDs: []string{"0A:00:00:00:00:00:01"}, // Default structured root fallback anchor
 			LastUID:  "0A:00:00:00:00:00:01",
@@ -125,7 +185,7 @@ func main() {
 		log.Fatalf("Error loading JSON data: %v", err)
 	}
 
-	// 3. Register Explicit HTTP Routing Handlers
+	// 5. Register Explicit HTTP Routing Handlers
 	http.HandleFunc("/items", db.handleItems)
 	http.HandleFunc("/items/", db.handleIndividual)
 	http.HandleFunc("/scan", db.handlePhoneScan)
@@ -133,15 +193,120 @@ func main() {
 	http.HandleFunc("/index.html", handleDashboardFile)
 	http.HandleFunc("/scanner.html", handleScannerFile)
 
-	// 4. Start Server on all interfaces (0.0.0.0)
+	// 6. Start Server on all interfaces (0.0.0.0)
 	fmt.Println("Vessel Inventory Node online!")
-	fmt.Println(" -> Desktop UI: http://localhost:8080/index.html")
-	fmt.Println(" -> Mobile Scanner UI: http://localhost:8080/scanner.html")
+	// Fetch all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		log.Fatalf("Failed to get interfaces: %v", err)
+	}
+
+	fmt.Println("Available Network URLs:")
+	for _, iface := range interfaces {
+		// Skip interfaces that are down or are loopback (localhost)
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		// Get addresses for this interface
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue // Skip if we can't read addresses
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// Filter for IPv4 addresses only (to keep it clean for users)
+			if ip == nil || ip.To4() == nil {
+				continue
+			}
+
+			// Print the working URLs for your local network
+			fmt.Printf(" -> [%s] http://%s:8080/index.html\n", iface.Name, ip)
+			fmt.Printf(" -> [%s] http://%s:8080/scanner.html\n", iface.Name, ip)
+		}
+	}
 
 	if err := http.ListenAndServe("0.0.0.0:8080", nil); err != nil {
 		log.Fatalf("HTTP Server crashed: %v", err)
 	}
 }
+
+// --- SYSTEMD INLINE INSTALLATION LOGIC ---
+
+func installService() error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("installation requires root privileges; re-run with 'sudo'")
+	}
+
+	// Evaluate calling system user environment context (fallbacks handle clean mapping)
+	targetUser := os.Getenv("SUDO_USER")
+	if targetUser == "" {
+		targetUser = os.Getenv("USER")
+	}
+	if targetUser == "" {
+		targetUser = "root"
+	}
+
+	// Track dynamic execution coordinates
+	binaryPath, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		return fmt.Errorf("failed to determine binary path: %w", err)
+	}
+	workingDir := filepath.Dir(binaryPath)
+
+	// Format systemd service dynamically utilizing runtime environmental parameters
+	serviceConfig := fmt.Sprintf(`[Unit]
+Description=SV Frog & Puffin Inventory Matrix Service
+After=network.target
+
+[Service]
+Type=simple
+User=%s
+WorkingDirectory=%s
+ExecStart=%s
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+`, targetUser, workingDir, binaryPath)
+
+	servicePath := "/etc/systemd/system/vessel-inventory.service"
+	err = os.WriteFile(servicePath, []byte(serviceConfig), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write service file configuration: %w", err)
+	}
+	fmt.Printf("✓ Written systemd unit configuration for host user: %s\n", targetUser)
+
+	// Route service parameters via host system commands
+	commands := [][]string{
+		{"systemctl", "daemon-reload"},
+		{"systemctl", "enable", "vessel-inventory"},
+		{"systemctl", "start", "vessel-inventory"},
+	}
+
+	for _, cmd := range commands {
+		out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed executing %s pipeline sequence: %s (%w)", cmd[0], string(out), err)
+		}
+	}
+
+	fmt.Println("✓ Vessel Inventory successfully installed and running as a background service!")
+	return nil
+}
+
+// --- STANDARD HANDLER FALLBACKS ---
 
 func handleDashboardFile(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/index.html" {
@@ -239,7 +404,6 @@ func (db *Database) searchItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Returns the wrapper with metadata alongside filtered items
 	json.NewEncoder(w).Encode(Inventory{
 		RootUIDs: db.data.RootUIDs,
 		LastUID:  db.data.LastUID,
@@ -273,13 +437,10 @@ func (db *Database) upsertItem(w http.ResponseWriter, r *http.Request) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	// Metadata Tracking: If the item uses our internal sequential syntax (0A:),
-	// track it to ensure last_uid updates on manual registration additions.
 	if strings.HasPrefix(incoming.UID, "0A:") {
 		incomingNorm := strings.ReplaceAll(incoming.UID, ":", "")
 		lastNorm := strings.ReplaceAll(db.data.LastUID, ":", "")
 
-		// Lexicographical comparison works safely since strings are zero-padded left
 		if incomingNorm > lastNorm {
 			db.data.LastUID = incoming.UID
 		}

@@ -35,6 +35,7 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
 echo "🚀 Starting the optimization build process..."
+echo ""
 
 # Iterate over the array
 for TARGET in "${TARGETS[@]}"; do
@@ -43,6 +44,7 @@ for TARGET in "${TARGETS[@]}"; do
     
     # Determine the output structure
     TARGET_DIR="${DIST_DIR}/${GOOS}/${GOARCH}"
+    echo "📁 Creating Directory: ${TARGET_DIR}"
     mkdir -p "$TARGET_DIR"
 
     
@@ -60,6 +62,10 @@ for TARGET in "${TARGETS[@]}"; do
         -ldflags="-s -w" \
         -o "${OUTPUT_NAME}" \
         "$SRC_FILE"
+    echo "⚙️  Making executable: ${OUTPUT_NAME}"
+    chmod +x ${OUTPUT_NAME}
+    echo "✅ Completed build!"
+    echo ""
 done
 
 echo "✨ Builds completed successfully! Check the '${DIST_DIR}' directory."

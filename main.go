@@ -51,6 +51,7 @@ type Database struct {
 const (
 	defaultFilePath = "items.json"
 	scanTopic       = "vessel/scan" // MQTT topic the inventory system exchanges scan data on
+	httpPort        = 8080          // HTTP: dashboard, discovery and QR
 )
 
 //go:embed index.html
@@ -198,6 +199,8 @@ func main() {
 	http.HandleFunc("/scan", db.handlePhoneScan)
 
 	http.HandleFunc("/", handleHostsPage)
+	http.HandleFunc("/qr", handleQRPage)
+	http.HandleFunc("/qr.png", handleQRImage)
 	http.HandleFunc("/index.html", handleDashboardFile)
 	http.HandleFunc("/scanner.html", handleScannerFile)
 
@@ -205,7 +208,7 @@ func main() {
 	// (e.g. http://blackview.local:8080/).
 	var advertiser *mdnsAdvertiser
 	if *advertiseFlag {
-		advertiser = startMDNSAdvertise(*hostnameFlag, 8080)
+		advertiser = startMDNSAdvertise(*hostnameFlag, httpPort)
 	}
 
 	// On shutdown, send an mDNS goodbye (TTL=0) so peers drop our records.
@@ -255,12 +258,12 @@ func main() {
 			}
 
 			// Print the working URLs for your local network
-			fmt.Printf(" -> [%s] http://%s:8080/index.html\n", iface.Name, ip)
-			fmt.Printf(" -> [%s] http://%s:8080/scanner.html\n", iface.Name, ip)
+			fmt.Printf(" -> [%s] http://%s:%d/index.html\n", iface.Name, ip, httpPort)
+			fmt.Printf(" -> [%s] http://%s:%d/scanner.html\n", iface.Name, ip, httpPort)
 		}
 	}
 
-	if err := http.ListenAndServe("0.0.0.0:8080", nil); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", httpPort), nil); err != nil {
 		log.Fatalf("HTTP Server crashed: %v", err)
 	}
 }

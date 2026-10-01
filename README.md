@@ -120,6 +120,10 @@ Results are cached for 30 s; append `?refresh=1` to force a rescan. Links open
 in a **named window** (a slug per host + service), so clicking the same service
 again reuses that window instead of opening another one.
 
+`/qr` renders a QR code of this server's own URL (the `/` page), so a phone
+camera can open it without typing an IP or needing mDNS. The page has a **QR**
+icon in its header; the raw image is at `/qr.png`.
+
 Implemented in `hosts.go` + `hosts.html`, stdlib only. Because Android/Termux
 cannot receive multicast, it issues **legacy unicast** mDNS queries (source
 port != 5353) so responders reply unicast — which works on the phone as well as

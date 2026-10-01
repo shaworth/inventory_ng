@@ -91,7 +91,7 @@
             <div class="addrs">{{.AddrList}}</div>
             {{if .Links}}
             <div class="links">
-                {{range .Links}}<a class="btn" href="{{.URL}}">{{.Label}}</a>{{end}}
+                {{range .Links}}<a class="btn" href="{{.URL}}" target="{{.Target}}">{{.Label}}</a>{{end}}
             </div>
             {{end}}
             {{if .Services}}
@@ -106,7 +106,7 @@
                         <td>{{.Instance}}</td>
                         <td>{{if .Port}}{{.Port}}{{else}}&mdash;{{end}}</td>
                         <td class="mono">{{.TxtList}}</td>
-                        <td>{{if .URL}}<a href="{{.URL}}">{{.URL}}</a>{{else}}&mdash;{{end}}</td>
+                        <td>{{if .URL}}<a href="{{.URL}}" target="{{.Target}}">{{.URL}}</a>{{else}}&mdash;{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>

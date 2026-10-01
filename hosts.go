@@ -55,6 +55,7 @@ type Service struct {
 	Txt      []string // raw "key=value" TXT strings
 	Addrs    []string // addresses of the host providing the service
 	URL      string   // link, when a scheme can be inferred
+	Target   string   // slug used as the <a target> window name
 
 	srcIP string // responder address (fallback when no SRV/A is present)
 }
@@ -62,8 +63,9 @@ type Service struct {
 // Link is a named interface URL (e.g. a web GUI or admin console) that we can
 // point at a host but that is not itself advertised over mDNS.
 type Link struct {
-	Label string
-	URL   string
+	Label  string
+	URL    string
+	Target string // slug used as the <a target> window name
 }
 
 // Host groups a discovered host and the services it advertises.
@@ -428,6 +430,9 @@ func assembleHosts(instances map[string]*Service, hostAddrs map[string]map[strin
 	for _, h := range hostMap {
 		for j := range h.Services {
 			h.Services[j].URL = serviceURL(&h.Services[j], h.Addrs)
+			if h.Services[j].URL != "" {
+				h.Services[j].Target = windowName(h.Name, serviceName(h.Services[j].Type))
+			}
 		}
 		if isVictron(h.Services) {
 			// The Cerbo's MQTT broker and the inventory topic are not
@@ -447,6 +452,9 @@ func assembleHosts(instances map[string]*Service, hostAddrs map[string]map[strin
 					Link{Label: "Signal K", URL: "http://" + net.JoinHostPort(ip, "3000") + "/"},
 				)
 			}
+		}
+		for k := range h.Links {
+			h.Links[k].Target = windowName(h.Name, slug(h.Links[k].Label))
 		}
 		sort.Slice(h.Services, func(a, b int) bool {
 			if h.Services[a].Type != h.Services[b].Type {
@@ -496,6 +504,52 @@ func serviceURL(s *Service, addrs []string) string {
 		hostport = net.JoinHostPort(ip, strconv.Itoa(int(port)))
 	}
 	return scheme + "://" + hostport + path
+}
+
+// slug converts a string into a lowercase, hyphen-separated token, e.g.
+// "venus.local" -> "venus-local", "GUI v2" -> "gui-v2".
+func slug(s string) string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	dash := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			dash = false
+		case !dash:
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// serviceName extracts the DNS-SD service name from a type, e.g.
+// "_http._tcp" -> "http", "_garmin-mrn-html._tcp" -> "garmin-mrn-html".
+func serviceName(typ string) string {
+	t := strings.TrimPrefix(strings.ToLower(typ), "_")
+	if i := strings.IndexByte(t, '.'); i >= 0 {
+		t = t[:i]
+	}
+	return slug(t)
+}
+
+// windowName builds the browser window name (<a target>) scoped to a host and
+// service, so each host+service reuses one window and never spawns more than
+// one.
+func windowName(host, service string) string {
+	h := slug(host)
+	switch {
+	case h != "" && service != "":
+		return h + "-" + service
+	case h != "":
+		return h
+	case service != "":
+		return service
+	default:
+		return "service"
+	}
 }
 
 func firstIPv4(addrs []string) string {

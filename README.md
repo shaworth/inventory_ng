@@ -116,7 +116,9 @@ DNS-SD and lists:
   the `UrlPath` TXT record — e.g. the Cerbo GX at `http://<ip>/app`).
 
 `/index.html` (dashboard) and `/scanner.html` (NFC scanner) are unchanged.
-Results are cached for 30 s; append `?refresh=1` to force a rescan.
+Results are cached for 30 s; append `?refresh=1` to force a rescan. Links open
+in a **named window** (a slug per host + service), so clicking the same service
+again reuses that window instead of opening another one.
 
 Implemented in `hosts.go` + `hosts.html`, stdlib only. Because Android/Termux
 cannot receive multicast, it issues **legacy unicast** mDNS queries (source

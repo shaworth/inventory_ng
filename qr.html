@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vessel Inventory - Scan to open</title>
+    <meta name="theme-color" content="#00adb5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" href="/icon-192.png">
+    <link rel="apple-touch-icon" href="/icon-192.png">
     <style>
         :root {
             --bg-main: #141923;
@@ -92,6 +97,10 @@
     <p class="hint">Point your phone camera at the code to open this server. It refreshes automatically if the address changes.</p>
 
     <script>
+        // Enable home-screen install (requires a secure context, e.g. localhost).
+        if ('serviceWorker' in navigator && window.isSecureContext) {
+            navigator.serviceWorker.register('/sw.js').catch(function () {});
+        }
         // Keep the QR current if the phone's address changes.
         setInterval(function () {
             document.getElementById('qr').src = '/qr.png?' + Date.now();

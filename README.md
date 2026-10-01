@@ -124,6 +124,11 @@ again reuses that window instead of opening another one.
 camera can open it without typing an IP or needing mDNS. The page has a **QR**
 icon in its header; the raw image is at `/qr.png`.
 
+`/qr` is also an installable web app (manifest + generated icon + no-op service
+worker), so it can be pinned to the home screen as an icon that opens the QR
+full-screen: on the device, browse to `http://localhost:8080/qr` and choose
+*Install app* / *Add to Home screen*.
+
 Implemented in `hosts.go` + `hosts.html`, stdlib only. Because Android/Termux
 cannot receive multicast, it issues **legacy unicast** mDNS queries (source
 port != 5353) so responders reply unicast — which works on the phone as well as

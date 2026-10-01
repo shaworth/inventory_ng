@@ -201,6 +201,10 @@ func main() {
 	http.HandleFunc("/", handleHostsPage)
 	http.HandleFunc("/qr", handleQRPage)
 	http.HandleFunc("/qr.png", handleQRImage)
+	http.HandleFunc("/manifest.webmanifest", handleManifest)
+	http.HandleFunc("/sw.js", handleServiceWorker)
+	http.HandleFunc("/icon-192.png", handleIcon)
+	http.HandleFunc("/icon-512.png", handleIcon)
 	http.HandleFunc("/index.html", handleDashboardFile)
 	http.HandleFunc("/scanner.html", handleScannerFile)
 

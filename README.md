@@ -105,7 +105,7 @@ the phone):
 
 On shutdown it sends an mDNS "goodbye" (TTL=0) so peers drop the records.
 
-## Network host discovery (`/`)
+## Services Finder (`/`)
 
 `GET /` serves a discovery page that browses the local network via mDNS /
 DNS-SD and lists:
@@ -120,9 +120,11 @@ Results are cached for 30 s; append `?refresh=1` to force a rescan. Links open
 in a **named window** (a slug per host + service), so clicking the same service
 again reuses that window instead of opening another one.
 
-`/qr` renders a QR code of this server's own URL (the `/` page), so a phone
-camera can open it without typing an IP or needing mDNS. The page has a **QR**
-icon in its header; the raw image is at `/qr.png`.
+`/qr` renders a QR code of the Services Finder page (`/`), so a phone camera can
+open it without typing an IP or needing mDNS. The page just shows the code (scan
+it with **Google Lens** — the default Android camera app can't read QR codes). A
+**QR** icon in the dashboard and Services Finder headers links here; the raw
+image is at `/qr.png`.
 
 `/qr` is also an installable web app (manifest + generated icon + no-op service
 worker), so it can be pinned to the home screen as an icon that opens the QR

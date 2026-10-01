@@ -16,15 +16,15 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-// qr.go serves a QR code encoding this server's own URL, so a phone camera can
-// open the Network Hosts page without typing an IP or relying on mDNS.
+// qr.go serves a QR code encoding the Services Finder page, so a phone camera
+// can open it without typing an IP or relying on mDNS.
 
 //go:embed qr.html
 var qrHTML string
 
 var qrTmpl = template.Must(template.New("qr").Parse(qrHTML))
 
-// qrURL is what the QR encodes: http://<this host's LAN IP>:<httpPort>/.
+// qrURL is what the QR encodes: the Services Finder page on this host.
 func qrURL() string {
 	host := "localhost"
 	if ip := lanIPv4(); ip != nil {

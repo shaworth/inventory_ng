@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vessel Inventory - Scan to open</title>
+    <title>Vessel Inventory - Scan for Services Finder</title>
     <meta name="theme-color" content="#00adb5">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="/manifest.webmanifest">
@@ -81,12 +81,7 @@
 <body>
 
     <header>
-        <h1>Scan to open</h1>
-        <div class="actions">
-            <a class="btn btn-secondary" href="/">Network Hosts</a>
-            <a class="btn btn-secondary" href="/index.html">Inventory</a>
-            <a class="btn btn-secondary" href="/scanner.html">Scanner</a>
-        </div>
+        <h1>Scan for Services Finder</h1>
     </header>
 
     <div class="card">
@@ -94,7 +89,10 @@
     </div>
 
     <div class="url">{{.URL}}</div>
-    <p class="hint">Point your phone camera at the code to open this server. It refreshes automatically if the address changes.</p>
+    <p class="hint">
+        <strong>Google Lens</strong> and most camera apps can open this QR code &mdash; point one
+        at the code and tap the link it finds.
+    </p>
 
     <script>
         // Enable home-screen install (requires a secure context, e.g. localhost).

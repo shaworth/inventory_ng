@@ -46,6 +46,11 @@ var hostsHTML string
 
 var hostsTmpl = template.Must(template.New("hosts").Parse(hostsHTML))
 
+//go:embed hosts_detail.html
+var hostsDetailHTML string
+
+var hostsDetailTmpl = template.Must(template.New("hosts_detail").Parse(hostsDetailHTML))
+
 // Service is one advertised DNS-SD service instance (e.g. Victron._http._tcp).
 type Service struct {
 	Type     string   // _http._tcp
@@ -78,6 +83,9 @@ type Host struct {
 
 // AddrList renders addresses for the template.
 func (h Host) AddrList() string { return strings.Join(h.Addrs, ", ") }
+
+// Slug is a URL-safe identifier used for the host's detail page.
+func (h Host) Slug() string { return slug(h.Name) }
 
 // TxtList renders the de-duplicated raw TXT records for the template. Repeated
 // probes can surface the same record twice, so collapse duplicates.
@@ -635,6 +643,27 @@ func getHosts(force bool) ([]Host, time.Duration, bool) {
 	}
 	hostsVal, hostsAt, hostsDur = hosts, time.Now(), dur
 	return hosts, dur, false
+}
+
+// handleHostDetail renders the drill-down page for a single host, keyed by the
+// host's slug (e.g. /host/venus-local).
+func handleHostDetail(w http.ResponseWriter, r *http.Request) {
+	want := strings.Trim(strings.TrimPrefix(r.URL.Path, "/host/"), "/")
+	if want == "" {
+		http.NotFound(w, r)
+		return
+	}
+	hosts, _, _ := getHosts(false)
+	for i := range hosts {
+		if hosts[i].Slug() == want {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := hostsDetailTmpl.Execute(w, struct{ Host Host }{hosts[i]}); err != nil {
+				log.Printf("host detail template render failed: %v", err)
+			}
+			return
+		}
+	}
+	http.NotFound(w, r)
 }
 
 func handleHostsPage(w http.ResponseWriter, r *http.Request) {

@@ -198,6 +198,7 @@ func main() {
 	http.HandleFunc("/items/", db.handleIndividual)
 	http.HandleFunc("/scan", db.handlePhoneScan)
 
+	http.HandleFunc("/host/", handleHostDetail)
 	http.HandleFunc("/", handleHostsPage)
 	http.HandleFunc("/qr", handleQRPage)
 	http.HandleFunc("/qr.png", handleQRImage)

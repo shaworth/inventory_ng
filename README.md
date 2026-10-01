@@ -108,12 +108,13 @@ On shutdown it sends an mDNS "goodbye" (TTL=0) so peers drop the records.
 ## Services Finder (`/`)
 
 `GET /` serves a discovery page that browses the local network via mDNS /
-DNS-SD and lists:
+DNS-SD. The listing is deliberately lightweight: each host shows just its
+**browser-reachable links** (HTTP/HTTPS services plus known interfaces, honouring
+the `UrlPath` TXT record — e.g. the Cerbo GX at `http://<ip>/app`).
 
-- each host found, with its IPv4/IPv6 address(es),
-- the services it advertises (e.g. `_http._tcp`, `_ssh._tcp`), and
-- a clickable link where a URL can be inferred (HTTP/HTTPS services, honouring
-  the `UrlPath` TXT record — e.g. the Cerbo GX at `http://<ip>/app`).
+Everything else lives on a drill-down page, `GET /host/<slug>` (e.g.
+`/host/venus-local`): the host's IPv4/IPv6 address(es) and all advertised
+services (`_http._tcp`, `_ssh._tcp`, port, TXT records, links).
 
 `/index.html` (dashboard) and `/scanner.html` (NFC scanner) are unchanged.
 Results are cached for 30 s; append `?refresh=1` to force a rescan. Links open
@@ -122,9 +123,10 @@ again reuses that window instead of opening another one.
 
 `/qr` renders a QR code of the Services Finder page (`/`), so a phone camera can
 open it without typing an IP or needing mDNS. The page just shows the code (scan
-it with **Google Lens** — the default Android camera app can't read QR codes). A
-**QR** icon in the dashboard and Services Finder headers links here; the raw
-image is at `/qr.png`.
+it with **Google Lens** — the default Android camera app can't read QR codes).
+It is intentionally **not** in the nav (anyone with the UI open doesn't need a QR
+to find the address); reach it directly at `/qr` — e.g. via the home-screen icon
+or `termux-open-url http://localhost:8080/qr`. The raw image is at `/qr.png`.
 
 `/qr` is also an installable web app (manifest + generated icon + no-op service
 worker), so it can be pinned to the home screen as an icon that opens the QR

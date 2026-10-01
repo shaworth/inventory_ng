@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vessel Inventory - Services Finder</title>
+    <title>{{.Host.Name}} - Services Finder</title>
     <style>
         :root {
             --bg-main: #141923;
@@ -32,8 +32,6 @@
             margin-bottom: 20px;
         }
         h1 { margin: 0; font-size: 1.4rem; color: var(--accent); }
-        .meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
-        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .btn {
             background: var(--accent);
             color: #fff;
@@ -46,18 +44,15 @@
             text-decoration: none;
         }
         .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-        .host {
+        .card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 16px;
+            padding: 16px;
         }
-        .host h2 { margin: 0 0 4px 0; font-size: 1.05rem; }
-        .addrs { font-family: monospace; color: var(--accent); font-size: 0.85rem; margin-bottom: 12px; }
-        .links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-        .host .details { display: inline-block; font-size: 0.8rem; color: var(--text-muted); text-decoration: none; }
-        .host .details:hover { color: var(--accent); }
+        h2 { font-size: 0.95rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px 0; }
+        .addrs { font-family: monospace; color: var(--accent); font-size: 0.9rem; margin-bottom: 18px; }
+        .links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
         table { width: 100%; border-collapse: collapse; }
         th, td {
             padding: 8px 10px;
@@ -69,38 +64,49 @@
         th { color: var(--text-muted); font-weight: 600; }
         td.mono { font-family: monospace; color: var(--text-muted); font-size: 0.78rem; word-break: break-word; }
         a { color: var(--accent); }
-        .empty { color: var(--text-muted); text-align: center; padding: 30px; }
+        .meta { color: var(--text-muted); font-size: 0.85rem; }
     </style>
 </head>
 <body>
 
     <header>
-        <div>
-            <h1>Services Finder</h1>
-            <div class="meta">mDNS / DNS-SD discovery &middot; scanned in {{.Duration}}{{if .Cached}} (cached, refreshed every 30s){{end}}</div>
-        </div>
-        <div class="actions">
-            <a class="btn" href="/?refresh=1">Net Scan</a>
-            <a class="btn btn-secondary" href="/index.html">Inventory</a>
-            <a class="btn btn-secondary" href="/scanner.html">Scan NFC Tag</a>
-        </div>
+        <h1>{{.Host.Name}}</h1>
+        <div class="actions"><a class="btn btn-secondary" href="/">&#8249; Services Finder</a></div>
     </header>
 
-    {{if .Hosts}}
-        {{range .Hosts}}
-        <div class="host">
-            <h2>{{.Name}}</h2>
-            {{if .Links}}
-            <div class="links">
-                {{range .Links}}<a class="btn" href="{{.URL}}" target="{{.Target}}">{{.Label}}</a>{{end}}
-            </div>
-            {{end}}
-            <a class="details" href="/host/{{.Slug}}">Details &rsaquo;</a>
+    <div class="card">
+        <h2>Addresses</h2>
+        <div class="addrs">{{.Host.AddrList}}</div>
+
+        {{if .Host.Links}}
+        <h2>Links</h2>
+        <div class="links">
+            {{range .Host.Links}}<a class="btn" href="{{.URL}}" target="{{.Target}}">{{.Label}}</a>{{end}}
         </div>
         {{end}}
-    {{else}}
-        <div class="empty">No hosts discovered on this network.</div>
-    {{end}}
+
+        <h2>Services</h2>
+        {{if .Host.Services}}
+        <table>
+            <thead>
+                <tr><th>Service</th><th>Instance</th><th>Port</th><th>Details</th><th>Link</th></tr>
+            </thead>
+            <tbody>
+                {{range .Host.Services}}
+                <tr>
+                    <td>{{if .Type}}{{.Type}}{{else}}&mdash;{{end}}</td>
+                    <td>{{.Instance}}</td>
+                    <td>{{if .Port}}{{.Port}}{{else}}&mdash;{{end}}</td>
+                    <td class="mono">{{.TxtList}}</td>
+                    <td>{{if .URL}}<a href="{{.URL}}" target="{{.Target}}">{{.URL}}</a>{{else}}&mdash;{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="meta">No advertised services.</div>
+        {{end}}
+    </div>
 
 </body>
 </html>

@@ -35,13 +35,22 @@
             gap: 10px;
             border-bottom: 1px solid var(--border);
             padding-bottom: 15px;
-            margin-bottom: 25px;
         }
-        .header-actions {
+        .nav-primary,
+        .nav-inventory {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             gap: 10px;
+        }
+        .nav-inventory {
+            padding: 12px 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .nav-primary .active {
+            border-color: var(--accent);
+            color: var(--accent);
         }
         @media (max-width: 700px) {
             header { flex-direction: column; align-items: stretch; }
@@ -152,15 +161,19 @@
             <h1>Vessel Inventory Tracker</h1>
             <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">Real-time tracking matrix</p>
         </div>
-        <div class="header-actions">
-            <div id="broker-indicator" class="broker-status">MQTT Offline</div>
-            <button class="btn btn-secondary" onclick="showListView()">List All</button>
-            <button class="btn btn-secondary" onclick="showOrphanView()">Unassigned / Orphans</button>
-            <button class="btn" onclick="showCreateView()">+ Add Item Manually</button>
-            <a class="btn btn-secondary" href="/">Services Finder</a>
+        <nav class="nav-primary">
             <a class="btn btn-secondary" href="/qr" title="Show access QR code">&#9638; QR</a>
-        </div>
+            <a class="btn btn-secondary" href="/">Services Finder</a>
+            <a class="btn btn-secondary active" href="/index.html">Inventory</a>
+        </nav>
     </header>
+
+    <nav class="nav-inventory" id="nav-inventory">
+        <div id="broker-indicator" class="broker-status">MQTT Offline</div>
+        <button class="btn btn-secondary" onclick="showListView()">List All</button>
+        <button class="btn btn-secondary" onclick="showOrphanView()">Unassigned / Orphans</button>
+        <button class="btn" onclick="showCreateView()">+ Add Item Manually</button>
+    </nav>
 
     <div id="search-container" class="search-bar">
         <input type="text" id="search-query" placeholder="Search title, description, or label..." oninput="triggerSearch()">

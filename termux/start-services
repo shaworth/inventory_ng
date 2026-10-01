@@ -1,0 +1,8 @@
+#!/data/data/com.termux/files/usr/bin/bash
+#
+# Termux:Boot entrypoint - executed on device startup.
+# Sibling scripts in ~/.termux/boot run in order: 0_wakelock, sshd, then this.
+# Once the network/loopback has settled, bring the inventory server online
+# inside tmux via inventory-ctl (idempotent - safe if it is already running).
+sleep 5
+"$HOME/inventory_ng/inventory-ctl" start

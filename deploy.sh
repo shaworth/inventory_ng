@@ -5,7 +5,7 @@ TARGETS=(
     "darwin:arm64::"
     "linux:arm64::"
     "linux:arm::"
-    "android:arm64:blackview:./inventory_ng"
+    "android:arm64:blackview:./inventory_ng"   # Android: launched via tmux on the Blackview phone (see README)
 )
 
 function show_usage () {

@@ -149,9 +149,7 @@
     </header>
 
     <div id="search-container" class="search-bar">
-        <input type="text" id="search-title" placeholder="Search title substring..." oninput="triggerSearch()">
-        <input type="text" id="search-desc" placeholder="Search description substring..." oninput="triggerSearch()">
-        <input type="text" id="search-label" placeholder="Exact Label..." oninput="triggerSearch()">
+        <input type="text" id="search-query" placeholder="Search title, description, or label..." oninput="triggerSearch()">
     </div>
 
     <div id="view-list" class="view-panel active">
@@ -301,9 +299,7 @@
 
                 document.getElementById('search-container').style.display = 'flex';
                 
-                document.getElementById('search-title').value = '';
-                document.getElementById('search-desc').value = '';
-                document.getElementById('search-label').value = '';
+                document.getElementById('search-query').value = '';
 
                 switchPanel('view-list');
                 renderTable(hierarchySubsets, true);
@@ -573,20 +569,55 @@
             document.getElementById(panelId).classList.add('active');
         }
 
-        async function triggerSearch() {
-            const title = document.getElementById('search-title').value;
-            const desc = document.getElementById('search-desc').value;
-            const label = document.getElementById('search-label').value;
+        // Unified search: one box, fanned out to the three searchable fields in parallel.
+        // A debounce handle + incrementing token keep rapid keystrokes from spamming the
+        // API and prevent an older (slower) response from overwriting a newer result set.
+        let searchTimer = null;
+        let searchSeq = 0;
 
-            let params = new URLSearchParams();
-            if (title) params.append('title', title);
-            if (desc) params.append('description', desc);
-            if (label) params.append('label', label);
+        function triggerSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => runSearch(document.getElementById('search-query').value.trim()), 200);
+        }
+
+        async function runSearch(query) {
+            // Empty query restores the full inventory list
+            if (!query) {
+                renderTable(allItems);
+                return;
+            }
+
+            const token = ++searchSeq;
+
+            // Fire one request per field simultaneously and resolve them together
+            const fields = ['title', 'description', 'label'];
 
             try {
-                const response = await fetch('/items?' + params.toString());
-                const data = await response.json();
-                renderTable(data.items || []);
+                const responses = await Promise.all(fields.map(field => {
+                    const params = new URLSearchParams();
+                    params.append(field, query);
+                    return fetch('/items?' + params.toString());
+                }));
+
+                const payloads = await Promise.all(responses.map(res => res.json()));
+
+                // Discard this batch if a newer search has been issued since
+                if (token !== searchSeq) return;
+
+                // Merge matches from all three fields, de-duplicating by UID
+                // (an item may match the term in more than one field)
+                const seen = new Set();
+                const merged = [];
+                payloads.forEach(payload => {
+                    (payload.items || []).forEach(item => {
+                        if (!seen.has(item.uid)) {
+                            seen.add(item.uid);
+                            merged.push(item);
+                        }
+                    });
+                });
+
+                renderTable(merged);
             } catch (err) {
                 console.error("Search criteria lookup failure:", err);
             }

@@ -10,10 +10,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/listeners"
@@ -46,7 +48,10 @@ type Database struct {
 	mqtt     *mqtt.Server
 }
 
-const defaultFilePath = "items.json"
+const (
+	defaultFilePath = "items.json"
+	scanTopic       = "vessel/scan" // MQTT topic the inventory system exchanges scan data on
+)
 
 //go:embed index.html
 var indexHTML []byte
@@ -83,6 +88,8 @@ func (h *ConsoleLoggerHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packe
 func main() {
 	// 1. Intercept execution logic if the dynamic self-installation flag is present
 	installFlag := flag.Bool("install", false, "Install and configure the systemd service matching the current environment user context")
+	advertiseFlag := flag.Bool("advertise", true, "Announce this server over mDNS so <hostname>.local resolves (announcement-only on Android)")
+	hostnameFlag := flag.String("hostname", "blackview", "mDNS hostname to advertise as <hostname>.local")
 	flag.Parse()
 
 	if *installFlag {
@@ -190,8 +197,27 @@ func main() {
 	http.HandleFunc("/items/", db.handleIndividual)
 	http.HandleFunc("/scan", db.handlePhoneScan)
 
+	http.HandleFunc("/", handleHostsPage)
 	http.HandleFunc("/index.html", handleDashboardFile)
 	http.HandleFunc("/scanner.html", handleScannerFile)
+
+	// Advertise ourselves over mDNS so clients can reach us by name
+	// (e.g. http://blackview.local:8080/).
+	var advertiser *mdnsAdvertiser
+	if *advertiseFlag {
+		advertiser = startMDNSAdvertise(*hostnameFlag, 8080)
+	}
+
+	// On shutdown, send an mDNS goodbye (TTL=0) so peers drop our records.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		if advertiser != nil {
+			advertiser.shutdown()
+		}
+		os.Exit(0)
+	}()
 
 	// 6. Start Server on all interfaces (0.0.0.0)
 	fmt.Println("Vessel Inventory Node online!")
@@ -349,7 +375,7 @@ func (db *Database) handlePhoneScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := db.mqtt.Publish("vessel/scan", []byte(uid), false, 0)
+	err := db.mqtt.Publish(scanTopic, []byte(uid), false, 0)
 	if err != nil {
 		log.Printf("MQTT Publish Error: %v\n", err)
 		http.Error(w, "Internal Broker error passing data", http.StatusInternalServerError)

@@ -1,0 +1,108 @@
+#!/data/data/com.termux/files/usr/bin/bash
+#
+# inventory-ctl - manage the vessel inventory server lifecycle under tmux.
+#
+# Android has no systemd for user services, so the long-lived Go server is
+# hosted inside a detached tmux session. Termux:Boot
+# (~/.termux/boot/start-services) calls `inventory-ctl start` on device
+# startup; use this script by hand for stop / restart / status / logs / attach.
+
+set -u
+
+SESSION="${INVENTORY_SESSION:-inventory}"
+APP_DIR="$HOME/inventory_ng"
+BIN="$APP_DIR/inventory_server"
+LOG="$APP_DIR/inventory.log"
+
+usage() {
+    cat <<EOF
+Usage: inventory-ctl {start|stop|restart|status|logs|attach}
+
+  start     launch the server in a detached tmux session (no-op if running)
+  stop      stop the server and destroy its tmux session
+  restart   stop, then start
+  status    report whether the server is running
+  logs      follow the server log (Ctrl-C to exit)
+  attach    attach to the running tmux session (detach with Ctrl-b d)
+
+Override the tmux session name with the INVENTORY_SESSION env var
+(current: $SESSION).
+EOF
+}
+
+warn() { echo "inventory-ctl: $*" >&2; }
+
+running() { tmux has-session -t "$SESSION" 2>/dev/null; }
+
+require_tmux() {
+    command -v tmux >/dev/null 2>&1 && return 0
+    warn "tmux not found - install it with: pkg install tmux"
+    return 1
+}
+
+cmd_start() {
+    require_tmux || return 1
+    if running; then
+        echo "inventory already running (tmux session '$SESSION')"
+        return 0
+    fi
+    [ -x "$BIN" ] || { warn "$BIN is missing or not executable"; return 1; }
+
+    # Keep the CPU awake while the server runs (0_wakelock also does this at boot).
+    command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
+
+    # The Go binary prompts "run directly in this terminal session?" whenever it
+    # is not backed by a systemd unit (always the case on Android). Feed it "y"
+    # through stdin so the detached session starts without blocking.
+    tmux new-session -d -s "$SESSION" -c "$APP_DIR" \
+        "printf 'y\n' | ./inventory_server 2>&1 | tee -a '$LOG'"
+
+    echo "inventory started (tmux session '$SESSION'); log -> $LOG"
+}
+
+cmd_stop() {
+    require_tmux || return 1
+    if ! running; then
+        echo "inventory is not running"
+        return 0
+    fi
+    tmux send-keys -t "$SESSION" C-c    # ask the server to exit
+    sleep 1
+    tmux kill-session -t "$SESSION" 2>/dev/null
+    echo "inventory stopped"
+}
+
+cmd_restart() { cmd_stop; sleep 1; cmd_start; }
+
+cmd_status() {
+    require_tmux || return 1
+    if running; then
+        echo "inventory: running (tmux session '$SESSION')"
+        tmux list-panes -t "$SESSION" -F '  pane_pid=#{pane_pid} command=#{pane_current_command}'
+        return 0
+    fi
+    echo "inventory: stopped"
+    return 1
+}
+
+cmd_logs() {
+    [ -f "$LOG" ] || { warn "no log yet at $LOG"; return 1; }
+    tail -n 40 -f "$LOG"
+}
+
+cmd_attach() {
+    require_tmux || return 1
+    running || { warn "not running; start it first"; return 1; }
+    tmux attach -t "$SESSION"
+}
+
+case "${1:-}" in
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    restart) cmd_restart ;;
+    status)  cmd_status ;;
+    logs)    cmd_logs ;;
+    attach)  cmd_attach ;;
+    ""|-h|--help|help) usage ;;
+    *)       usage; exit 2 ;;
+esac

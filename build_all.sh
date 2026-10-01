@@ -5,20 +5,20 @@ set -e
 
 # --- CONFIGURATION ---
 APP_NAME="inventory_server"
-SRC_FILE="main.go"
+SRC_FILE="."   # build the whole package (main.go + hosts.go), not just one file
 DIST_DIR="dist"
 
 # Target deployment node details (Modify as needed)
-PI_HOST="boathub"
-PI_USER="shaworth"
-PI_DEST_DIR="/home/${PI_USER}/vessel-inventory"
+#PI_HOST="boathub"
+#PI_USER="shaworth"
+#PI_DEST_DIR="/home/${PI_USER}/vessel-inventory"
 
-# Array of target platforms in the format "GOOS/GOARCH"
+# Array of target platforms in the format "GOOS/GOARCH/SSH_HOST"
 TARGETS=(
-    "darwin/arm64"
-    "linux/arm64"
-    "linux/arm"
-    "android/arm64"
+    "darwin/arm64/"
+    "linux/arm64/"
+    "linux/arm/"
+    "android/arm64/blackview"   # Android: launched via tmux on the Blackview phone (see README)
 )
 
 # --- FLAG PARSING ---
@@ -40,7 +40,7 @@ echo ""
 # Iterate over the array
 for TARGET in "${TARGETS[@]}"; do
     # Split the string by the forward slash
-    IFS="/" read -r GOOS GOARCH <<< "$TARGET"
+    IFS="/" read -r GOOS GOARCH SSH_HOST <<< "$TARGET"
     
     # Determine the output structure
     TARGET_DIR="${DIST_DIR}/${GOOS}/${GOARCH}"

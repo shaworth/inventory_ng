@@ -29,11 +29,22 @@
         }
         header {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
             border-bottom: 1px solid var(--border);
             padding-bottom: 15px;
             margin-bottom: 25px;
+        }
+        .header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        @media (max-width: 700px) {
+            header { flex-direction: column; align-items: stretch; }
         }
         h1 { margin: 0; font-size: 1.6rem; color: var(--accent); }
         .btn {
@@ -141,7 +152,7 @@
             <h1>Vessel Inventory Tracker</h1>
             <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">Real-time tracking matrix</p>
         </div>
-        <div style="display: flex; align-items: center; gap: 15px;">
+        <div class="header-actions">
             <div id="broker-indicator" class="broker-status">MQTT Offline</div>
             <button class="btn btn-secondary" onclick="showListView()">List All</button>
             <button class="btn btn-secondary" onclick="showOrphanView()">Unassigned / Orphans</button>

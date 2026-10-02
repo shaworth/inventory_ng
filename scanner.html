@@ -73,6 +73,13 @@
         button:active {
             background-color: #007a80;
         }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.9;
+        }
+        button.unsupported {
+            background-color: #f44336;
+        }
     </style>
 </head>
 <body>
@@ -107,9 +114,13 @@
     }
 
     if (!('NDEFReader' in window)) {
-        updateStatus('Web NFC not supported in this browser.', 'error');
+        // Reflect the unsupported state on the button itself (red, not clickable)
+        // instead of hiding it and only warning the user after they tap.
+        scanBtn.textContent = 'Web NFC Not Supported';
+        scanBtn.classList.add('unsupported');
+        scanBtn.disabled = true;
+        updateStatus('Web NFC is not supported on this device.', 'error');
         log('Error: Web NFC API missing. Check flags or browser variant.');
-        scanBtn.style.display = 'none';
         // Give the user a way out of the dead end.
         document.getElementById('nav-box').style.display = 'block';
     }

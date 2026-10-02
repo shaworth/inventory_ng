@@ -39,6 +39,7 @@ func handleQRPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	if err := qrTmpl.Execute(w, struct{ URL string }{qrURL()}); err != nil {
 		log.Printf("qr template render failed: %v", err)
 	}

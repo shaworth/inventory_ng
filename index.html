@@ -149,6 +149,7 @@
         }
         .action-tray {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
             margin-top: 20px;
         }
@@ -225,9 +226,9 @@
                     <input type="number" id="form-qty" value="1" min="0" required>
                 </div>
                 <div class="action-tray">
-                    <button type="submit" class="btn">Commit Save</button>
+                    <button type="button" id="form-delete-btn" class="btn btn-danger">Soft Delete</button>
                     <button type="button" class="btn btn-secondary" onclick="showListView()">Cancel</button>
-                    <button type="button" id="form-delete-btn" class="btn btn-danger" style="margin-left: auto;">Soft Delete</button>
+                    <button type="submit" class="btn" style="margin-left: auto;">Commit Save</button>
                 </div>
             </form>
         </div>
@@ -432,7 +433,14 @@
                     };
                 });
 
-                renderTable(allItems);
+                // Respect an active filter when (re)loading the list, so returning
+                // from an edit keeps the filtered view instead of showing everything.
+                const query = document.getElementById('search-query').value.trim();
+                if (query) {
+                    await runSearch(query);
+                } else {
+                    renderTable(allItems);
+                }
                 populateParentDropdown();
             } catch (err) {
                 console.error("Database connection failure:", err);

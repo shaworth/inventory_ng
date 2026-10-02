@@ -657,6 +657,7 @@ func handleHostDetail(w http.ResponseWriter, r *http.Request) {
 	for i := range hosts {
 		if hosts[i].Slug() == want {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
 			if err := hostsDetailTmpl.Execute(w, struct{ Host Host }{hosts[i]}); err != nil {
 				log.Printf("host detail template render failed: %v", err)
 			}
@@ -673,6 +674,7 @@ func handleHostsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	hosts, dur, cached := getHosts(r.URL.Query().Has("refresh"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	if err := hostsTmpl.Execute(w, hostsPageData{
 		Hosts:    hosts,
 		Duration: dur.Round(time.Millisecond).String(),

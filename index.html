@@ -123,6 +123,33 @@
         th { background-color: rgba(0,173,181,0.1); color: var(--accent); }
         tr:hover { background-color: rgba(255,255,255,0.02); }
 
+        .pager {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 14px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .pager-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .pager select {
+            background: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 0.85rem;
+        }
+        #pager-pageno { min-width: 90px; text-align: center; white-space: nowrap; }
+        .pager button:disabled { opacity: 0.5; cursor: not-allowed; }
+
         .form-group {
             margin-bottom: 15px;
         }
@@ -195,6 +222,20 @@
             </thead>
             <tbody id="inventory-table-body"></tbody>
         </table>
+        <div id="pager" class="pager">
+            <div id="pager-info">Showing <span id="pager-range">0</span> of <span id="pager-total">0</span></div>
+            <div class="pager-actions">
+                <select id="pager-size" title="Items per page">
+                    <option value="5">5 / page</option>
+                    <option value="10">10 / page</option>
+                    <option value="25">25 / page</option>
+                    <option value="50">50 / page</option>
+                </select>
+                <button class="btn btn-secondary" type="button" id="pager-prev">&#8249; Prev</button>
+                <span id="pager-pageno">Page 1 of 1</span>
+                <button class="btn btn-secondary" type="button" id="pager-next">Next &#8250;</button>
+            </div>
+        </div>
     </div>
 
     <div id="view-form" class="view-panel">
@@ -242,6 +283,11 @@
 
         let allItems = [];
         let isEditing = false; // System lock flag to intercept background scans safely
+
+        // Pagination state (page size is user selectable: 5/10/25/50)
+        let allRows = [];      // the current view's rows, after filters
+        let currentPage = 1;
+        let pageSize = 10;
 
         // Connect to Embedded Mochi MQTT Broker over WebSockets
         console.log("Computed network broker bridge address: " + MQTT_BROKER);
@@ -449,16 +495,28 @@
         }
 
         function renderTable(itemsList, bypassUnregisteredFilter = false) {
+            allRows = itemsList.filter(item => {
+                if (bypassUnregisteredFilter || item.isRoot) return true;
+                return !(item.title && item.title.startsWith("New Unregistered Component"));
+            });
+            currentPage = 1;
+            renderPage();
+        }
+
+        // Draws a single page of allRows and updates the pager controls.
+        function renderPage() {
             const tbody = document.getElementById('inventory-table-body');
             tbody.innerHTML = '';
-            
-            itemsList.forEach(item => {
-                if (!bypassUnregisteredFilter && !item.isRoot) {
-                    if (item.title && item.title.startsWith("New Unregistered Component")) {
-                        return;
-                    }
-                }
 
+            const total = allRows.length;
+            const pageCount = Math.max(1, Math.ceil(total / pageSize));
+            if (currentPage > pageCount) currentPage = pageCount;
+            if (currentPage < 1) currentPage = 1;
+
+            const start = (currentPage - 1) * pageSize;
+            const pageRows = allRows.slice(start, start + pageSize);
+
+            pageRows.forEach(item => {
                 const tr = document.createElement('tr');
                 
                 // UID is kept in the DOM string for index-matching, but hidden visually via CSS rules
@@ -478,7 +536,31 @@
                 document.getElementById(`edit-btn-${item.uid}`).addEventListener('click', () => openEditScreen(item));
                 document.getElementById(`contents-btn-${item.uid}`).addEventListener('click', () => isolateContainerHierarchy(item.uid));
             });
+
+            document.getElementById('pager-range').textContent = total === 0 ? '0' : (start + 1) + '\u2013' + (start + pageRows.length);
+            document.getElementById('pager-total').textContent = total;
+            document.getElementById('pager-pageno').textContent = 'Page ' + currentPage + ' of ' + pageCount;
+            document.getElementById('pager-prev').disabled = currentPage <= 1;
+            document.getElementById('pager-next').disabled = currentPage >= pageCount;
         }
+
+        // Pagination controls (page-size choice is remembered in localStorage).
+        (function initPager() {
+            const sizeSel = document.getElementById('pager-size');
+            try {
+                const saved = parseInt(localStorage.getItem('inventoryPageSize'), 10);
+                if ([5, 10, 25, 50].indexOf(saved) !== -1) pageSize = saved;
+            } catch (e) {}
+            sizeSel.value = String(pageSize);
+            sizeSel.addEventListener('change', function () {
+                pageSize = parseInt(this.value, 10) || 10;
+                try { localStorage.setItem('inventoryPageSize', pageSize); } catch (e) {}
+                currentPage = 1;
+                renderPage();
+            });
+            document.getElementById('pager-prev').addEventListener('click', function () { currentPage -= 1; renderPage(); });
+            document.getElementById('pager-next').addEventListener('click', function () { currentPage += 1; renderPage(); });
+        })();
 // HELPER FUNCTION: Recursively finds all descendants of a given parent UID
         // Used to prevent circular containment relationships (e.g., placing a box inside itself)
         function getDescendants(parentUID) {

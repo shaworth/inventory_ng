@@ -154,3 +154,34 @@ register/restart the service automatically.
     go build -o inventory_server main.go
     ./inventory_server          # runs in the current directory
 
+## Browser testing (Brave + CDP)
+
+UI changes can be verified against a real browser over the Chrome DevTools
+Protocol instead of guessing. `tools/cdp.js` is a dependency-free Node script
+(needs Node 21+ for the built-in `WebSocket`) that evaluates a JS expression in
+a live page and prints the result.
+
+    # 1. run the app locally (from the repo dir so it finds items.json)
+    go build -o /tmp/inv_bt . && ( printf 'y\n' | /tmp/inv_bt -advertise=false & ) ; sleep 2
+
+    # 2. start headless Brave with remote debugging
+    BRAVE="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+    "$BRAVE" --headless=new --disable-gpu --no-first-run \
+      --user-data-dir=/tmp/brave-cdp --remote-debugging-port=9222 \
+      "http://127.0.0.1:8080/index.html" &
+
+    # 3. evaluate expressions against the live page
+    node tools/cdp.js "document.getElementById('pager-pageno').textContent"
+    node tools/cdp.js "document.querySelectorAll('#inventory-table-body tr').length"
+    node tools/cdp.js "document.getElementById('pager-next').click(); document.getElementById('pager-pageno').textContent"
+
+    # 4. stop the test browser
+    pkill -f brave-cdp
+
+Notes:
+
+- Brave 153+ no longer supports the `--dump-dom` shortcut (it hangs); use the
+  CDP recipe above instead of a one-shot `--dump-dom`.
+- A headless desktop browser has **no Web NFC**, which conveniently exercises
+  the "NFC Disabled" state of the Scan NFC Tag button.
+

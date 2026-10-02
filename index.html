@@ -69,27 +69,7 @@
         }
         .btn:hover { opacity: 0.9; }
         .btn-danger { background: var(--danger); }
-        .modal-backdrop {
-            position: fixed;
-            top: 0; right: 0; bottom: 0; left: 0;
-            background: rgba(0, 0, 0, 0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            z-index: 1000;
-        }
-        .modal {
-            background: var(--bg-card);
-            border: 1px solid var(--danger);
-            border-radius: 10px;
-            padding: 20px;
-            max-width: 420px;
-            width: 100%;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-        }
-        .modal h3 { margin: 0 0 10px 0; color: var(--danger); }
-        .modal p { margin: 0 0 16px 0; font-size: 0.9rem; }
+        .btn:disabled { cursor: not-allowed; }
         .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
         
         .broker-status {
@@ -194,7 +174,7 @@
         <button class="btn btn-secondary" onclick="showListView()">List All</button>
         <button class="btn btn-secondary" onclick="showOrphanView()">Unassigned / Orphans</button>
         <button class="btn" onclick="showCreateView()">+ Add Item Manually</button>
-        <button class="btn btn-secondary" type="button" onclick="nfcScanClick()">Scan NFC Tag</button>
+        <button class="btn btn-secondary" type="button" id="nfc-nav-btn" onclick="nfcScanClick()">Scan NFC Tag</button>
     </nav>
 
     <div id="search-container" class="search-bar">
@@ -709,19 +689,21 @@
             }
         }
 
-        // "Scan NFC Tag" nav button: open the scanner when Web NFC is available,
-        // otherwise show a red warning modal instead of sending the user to a
-        // page that can only tell them it is unsupported.
+        // "Scan NFC Tag" nav button. Web NFC availability is detected reliably:
+        //  - available   -> normal button that opens the scanner
+        //  - unavailable -> red, labelled "NFC Disabled", and not clickable
         function nfcScanClick() {
-            if ('NDEFReader' in window) {
-                window.location.href = '/scanner.html';
-            } else {
-                document.getElementById('nfc-modal').style.display = 'flex';
+            window.location.href = '/scanner.html';
+        }
+        (function initNfcButton() {
+            const btn = document.getElementById('nfc-nav-btn');
+            if (btn && !('NDEFReader' in window)) {
+                btn.textContent = 'NFC Disabled';
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-danger');
+                btn.disabled = true;
             }
-        }
-        function hideNfcModal() {
-            document.getElementById('nfc-modal').style.display = 'none';
-        }
+        })();
 
         async function executeSoftDelete(uid) {
             if (!confirm("Are you certain you wish to mark this item as inactive?")) return;
@@ -743,14 +725,5 @@
 
         loadData();        
     </script>
-
-    <div id="nfc-modal" class="modal-backdrop" style="display: none;" onclick="hideNfcModal()">
-        <div class="modal" onclick="event.stopPropagation()">
-            <h3>&#9888; NFC Not Supported</h3>
-            <p>This device or browser doesn't support Web NFC, so NFC tags can't be scanned here.</p>
-            <button class="btn" type="button" onclick="hideNfcModal()">OK</button>
-        </div>
-    </div>
-
 </body>
 </html>

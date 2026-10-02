@@ -81,6 +81,9 @@
     <h1>Vessel Inventory Scanner</h1>
     <div id="status-box">Tap "Start Scanner" to begin</div>
     <button id="scan-btn">Start Scanner</button>
+    <div id="nav-box" style="display: none; margin-top: 15px;">
+        <a href="/index.html" style="display: inline-block; background: #00adb5; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: bold;">&#8249; Back to Inventory</a>
+    </div>
     <p style="margin-top: 20px; font-size: 0.9rem; color: #aaa;">Recent Activity:</p>
     <div id="log">System idle...</div>
 </div>
@@ -107,6 +110,8 @@
         updateStatus('Web NFC not supported in this browser.', 'error');
         log('Error: Web NFC API missing. Check flags or browser variant.');
         scanBtn.style.display = 'none';
+        // Give the user a way out of the dead end.
+        document.getElementById('nav-box').style.display = 'block';
     }
 
     scanBtn.addEventListener('click', async () => {
